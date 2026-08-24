@@ -54,10 +54,51 @@ export interface ProfileHealth {
   details: string[];
 }
 
+export interface ManifestSummary {
+  profileId: string;
+  valid: boolean;
+  manifestVersion: string;
+  modpackVersion: string;
+  releaseDate: string;
+  requiredFileCount: number;
+  optionalFileCount: number;
+  obsoleteFileCount: number;
+  updateSize: number | null;
+  source: string;
+  errors: string[];
+}
+
+export interface ServerStatus {
+  profileId: string;
+  configured: boolean;
+  checked: boolean;
+  online: boolean | null;
+  players: number | null;
+  maxPlayers: number | null;
+  latencyMs: number | null;
+  version: string;
+  motd: string;
+  map: string;
+  message: string;
+  cached: boolean;
+  checkedAtEpoch: number | null;
+}
+
+export interface FileVerification {
+  profileId: string;
+  checked: number;
+  current: number;
+  missing: string[];
+  changed: string[];
+  unsafeEntries: string[];
+}
+
 export interface BootstrapPayload {
   config: LauncherConfig;
   games: GameDefinition[];
   health: ProfileHealth[];
+  manifests: ManifestSummary[];
+  servers: ServerStatus[];
   dataDir: string;
 }
 

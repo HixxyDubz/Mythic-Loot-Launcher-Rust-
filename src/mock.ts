@@ -1,4 +1,4 @@
-import type { BootstrapPayload, GameProfile, ProfileHealth } from "./types";
+import type { BootstrapPayload, GameProfile, ManifestSummary, ProfileHealth, ServerStatus } from "./types";
 
 export const previewProfiles: GameProfile[] = [
   {
@@ -87,6 +87,34 @@ export function previewHealth(profile: GameProfile): ProfileHealth {
 }
 
 export function previewPayload(): BootstrapPayload {
+  const manifests: ManifestSummary[] = previewProfiles.map((profile) => ({
+    profileId: profile.id,
+    valid: true,
+    manifestVersion: "1.0",
+    modpackVersion: profile.requiredModpackVersion,
+    releaseDate: profile.game === "minecraft" ? "2026-08-13" : "2026-06-22",
+    requiredFileCount: profile.game === "minecraft" ? 2067 : 0,
+    optionalFileCount: 0,
+    obsoleteFileCount: 0,
+    updateSize: null,
+    source: "bundled launcher manifest",
+    errors: [],
+  }));
+  const servers: ServerStatus[] = previewProfiles.map((profile) => ({
+    profileId: profile.id,
+    configured: Boolean(profile.serverIp),
+    checked: false,
+    online: null,
+    players: null,
+    maxPlayers: null,
+    latencyMs: null,
+    version: "",
+    motd: "",
+    map: "",
+    message: "Add the private server address in settings",
+    cached: false,
+    checkedAtEpoch: null,
+  }));
   return {
     config: {
       schemaVersion: 1,
@@ -113,6 +141,8 @@ export function previewPayload(): BootstrapPayload {
       ["city_of_heroes", "City of Heroes - Sanctuary", "manual"],
     ].map(([id, displayName, detectionKind]) => ({ id, displayName, detectionKind })),
     health: previewProfiles.map(previewHealth),
+    manifests,
+    servers,
     dataDir: "Browser preview · native persistence is available in the Tauri app",
   };
 }

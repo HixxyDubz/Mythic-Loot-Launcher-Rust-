@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
-import { bootstrap, detectInstallations, launchProfile, saveProfile, selectProfile } from "./api";
+import { bootstrap, detectInstallations, launchProfile, refreshServerStatus, saveProfile, selectProfile, verifyProfileFiles } from "./api";
 import { Dashboard } from "./components/Dashboard";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { Sidebar } from "./components/Sidebar";
 import { TitleBar } from "./components/TitleBar";
 import { previewHealth } from "./mock";
-import type { BootstrapPayload, DetectedInstall, GameProfile } from "./types";
+import type { BootstrapPayload, DetectedInstall, FileVerification, GameProfile, ProfileHealth } from "./types";
 
 function App() {
   const [payload, setPayload] = useState<BootstrapPayload | null>(null);
@@ -15,6 +15,7 @@ function App() {
   const [notice, setNotice] = useState("");
   const [fatalError, setFatalError] = useState("");
   const [candidates, setCandidates] = useState<DetectedInstall[]>([]);
+  const [verifications, setVerifications] = useState<Record<string, FileVerification>>({});
 
   useEffect(() => {
     void bootstrap()
@@ -28,6 +29,14 @@ function App() {
   );
   const selectedHealth = useMemo(
     () => payload?.health.find((health) => health.profileId === payload.config.selectedProfileId),
+    [payload],
+  );
+  const selectedManifest = useMemo(
+    () => payload?.manifests.find((manifest) => manifest.profileId === payload.config.selectedProfileId),
+    [payload],
+  );
+  const selectedServer = useMemo(
+    () => payload?.servers.find((server) => server.profileId === payload.config.selectedProfileId),
     [payload],
   );
 
@@ -101,6 +110,54 @@ function App() {
     }
   }
 
+  async function refreshStatus() {
+    if (!payload || !selectedProfile) return;
+    setBusy(true);
+    setNotice("");
+    try {
+      const server = await refreshServerStatus(selectedProfile);
+      setPayload({
+        ...payload,
+        servers: payload.servers.map((item) => item.profileId === server.profileId ? server : item),
+        health: payload.health.map((health) => updateServerHealth(health, server.online, server.message)),
+      });
+      setNotice(server.message);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function verifyFiles() {
+    if (!payload || !selectedProfile) return;
+    setBusy(true);
+    setNotice("");
+    try {
+      const result = await verifyProfileFiles(selectedProfile.id);
+      setVerifications((current) => ({ ...current, [result.profileId]: result }));
+      const failures = result.missing.length + result.changed.length + result.unsafeEntries.length;
+      if (failures) {
+        setPayload({
+          ...payload,
+          health: payload.health.map((health) => health.profileId === result.profileId ? {
+            ...health,
+            status: "repairNeeded",
+            headline: "Installed files need repair",
+            details: [`${result.current} of ${result.checked} required files are current`, `${failures} files need attention`],
+          } : health),
+        });
+        setNotice(`Verification found ${failures} file${failures === 1 ? "" : "s"} needing attention.`);
+      } else {
+        setNotice(`All ${result.checked} required files match the trusted manifest.`);
+      }
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="app-shell">
       <TitleBar />
@@ -110,7 +167,7 @@ function App() {
           <h1>The launcher could not open its native data</h1>
           <p>{fatalError}</p>
         </div>
-      ) : !payload || !selectedProfile || !selectedHealth ? (
+      ) : !payload || !selectedProfile || !selectedHealth || !selectedManifest || !selectedServer ? (
         <div className="loading-state">
           <img src="/assets/mythic-loot-logo.jpg" alt="" />
           <span>Preparing your servers…</span>
@@ -139,9 +196,14 @@ function App() {
               <Dashboard
                 profile={selectedProfile}
                 health={selectedHealth}
+                manifest={selectedManifest}
+                server={selectedServer}
+                verification={verifications[selectedProfile.id]}
                 busy={busy}
                 onOpenSettings={() => setPage("settings")}
                 onPlay={() => void play()}
+                onRefreshStatus={() => void refreshStatus()}
+                onVerifyFiles={() => void verifyFiles()}
               />
             )}
           </div>
@@ -150,6 +212,16 @@ function App() {
       )}
     </div>
   );
+}
+
+function updateServerHealth(health: ProfileHealth, online: boolean | null, message: string): ProfileHealth {
+  if (online === false && (health.status === "ready" || health.status === "serverOffline")) {
+    return { ...health, status: "serverOffline", headline: "The private server did not respond", details: [...health.details.filter((detail) => !detail.startsWith("Server")), message] };
+  }
+  if (online === true && health.status === "serverOffline") {
+    return { ...health, status: "ready", headline: "Ready to play", details: [...health.details.filter((detail) => !detail.startsWith("Server")), "Private server responded online"] };
+  }
+  return health;
 }
 
 function errorMessage(error: unknown): string {

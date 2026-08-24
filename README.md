@@ -6,7 +6,7 @@ This repository is deliberately separate from **MLLP** (Mythic Loot Launcher Pyt
 
 ## Current status
 
-The new application has a working native shell, first-run profile store, built-in game catalogue, local installation detection, readiness assessment, profile editing, and native process launch. The complete parity position is tracked in [docs/PARITY_STATUS.md](docs/PARITY_STATUS.md).
+The new application has a working native shell, first-run profile store, built-in game catalogue, local installation detection, trusted v1 manifest validation, streaming SHA-256 file verification, native Minecraft/7DTD server checks, readiness assessment, profile editing, and native process launch. The complete parity position is tracked in [docs/PARITY_STATUS.md](docs/PARITY_STATUS.md).
 
 ## Development
 

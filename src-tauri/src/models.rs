@@ -179,6 +179,8 @@ pub struct BootstrapPayload {
     pub config: LauncherConfig,
     pub games: Vec<GameDefinition>,
     pub health: Vec<ProfileHealth>,
+    pub manifests: Vec<crate::manifest::ManifestSummary>,
+    pub servers: Vec<crate::server_status::ServerStatus>,
     pub data_dir: String,
 }
 

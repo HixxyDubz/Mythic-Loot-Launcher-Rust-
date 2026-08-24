@@ -15,16 +15,21 @@ import {
   Sparkles,
   Wrench,
 } from "lucide-react";
-import type { GameProfile, ProfileHealth, ReadinessStatus } from "../types";
+import type { FileVerification, GameProfile, ManifestSummary, ProfileHealth, ReadinessStatus, ServerStatus } from "../types";
 
 type DetailTab = "overview" | "news" | "changelog" | "rules";
 
 interface DashboardProps {
   profile: GameProfile;
   health: ProfileHealth;
+  manifest: ManifestSummary;
+  server: ServerStatus;
+  verification?: FileVerification;
   busy: boolean;
   onOpenSettings: () => void;
   onPlay: () => void;
+  onRefreshStatus: () => void;
+  onVerifyFiles: () => void;
 }
 
 const labels: Record<ReadinessStatus, string> = {
@@ -38,12 +43,22 @@ const labels: Record<ReadinessStatus, string> = {
   failed: "CHECK FAILED",
 };
 
-export function Dashboard({ profile, health, busy, onOpenSettings, onPlay }: DashboardProps) {
+export function Dashboard({ profile, health, manifest, server, verification, busy, onOpenSettings, onPlay, onRefreshStatus, onVerifyFiles }: DashboardProps) {
   const [tab, setTab] = useState<DetailTab>("overview");
   const ready = health.status === "ready";
   const serverAddress = profile.serverIp
     ? `${profile.serverIp}:${profile.serverPort}`
     : "Not configured";
+  const serverValue = !server.configured
+    ? "Not configured"
+    : !server.checked
+      ? "Not checked"
+      : server.online
+        ? `${server.players ?? "?"}/${server.maxPlayers ?? "?"} players`
+        : "Offline";
+  const verificationValue = verification
+    ? `${verification.current}/${verification.checked} current`
+    : `${manifest.requiredFileCount.toLocaleString()} tracked`;
 
   return (
     <main className="dashboard">
@@ -115,18 +130,23 @@ export function Dashboard({ profile, health, busy, onOpenSettings, onPlay }: Das
                 complete={Boolean(profile.installDir)}
               />
               <ReadinessRow
+                label="Trusted manifest"
+                value={manifest.valid ? `v${manifest.manifestVersion} · ${manifest.requiredFileCount.toLocaleString()} files` : "Validation failed"}
+                complete={manifest.valid}
+              />
+              <ReadinessRow
                 label="Modpack version"
                 value={profile.localModpackVersion || "Not verified"}
                 complete={
                   Boolean(profile.localModpackVersion) &&
-                  profile.localModpackVersion === profile.requiredModpackVersion
+                  profile.localModpackVersion === manifest.modpackVersion
                 }
               />
               <ReadinessRow
                 label="Live server check"
-                value={profile.serverIp ? "Protocol port pending" : "Not configured"}
-                complete={false}
-                pending
+                value={serverValue}
+                complete={server.online === true}
+                pending={!server.checked || server.online === null}
               />
             </div>
           </section>
@@ -142,9 +162,14 @@ export function Dashboard({ profile, health, busy, onOpenSettings, onPlay }: Das
             <dl className="server-facts">
               <div><dt>Address</dt><dd>{serverAddress}</dd></div>
               <div><dt>Game version</dt><dd>{profile.requiredGameVersion || "Not specified"}</dd></div>
-              <div><dt>Required pack</dt><dd>{profile.requiredModpackVersion || "Not specified"}</dd></div>
-              <div><dt>Direct join</dt><dd>{["seven_days", "factorio"].includes(profile.game) ? "Supported" : "In-game assist"}</dd></div>
+              <div><dt>Required pack</dt><dd>{manifest.modpackVersion || profile.requiredModpackVersion || "Not specified"}</dd></div>
+              <div><dt>Manifest files</dt><dd>{verificationValue}</dd></div>
+              {server.map && <div><dt>Current map</dt><dd>{server.map}</dd></div>}
+              {server.latencyMs !== null && <div><dt>Response</dt><dd>{server.latencyMs} ms{server.cached ? " · cached" : ""}</dd></div>}
             </dl>
+            <button className="inline-action" onClick={onRefreshStatus} disabled={busy || !server.configured}>
+              <RefreshCw size={14} className={busy ? "spin" : ""} /> Refresh server status
+            </button>
           </section>
 
           <section className="quick-card panel-card">
@@ -156,7 +181,9 @@ export function Dashboard({ profile, health, busy, onOpenSettings, onPlay }: Das
             </div>
             <div className="quick-actions">
               <button disabled><Download /> Update <small>Port scheduled</small></button>
-              <button disabled><RefreshCw /> Repair <small>Port scheduled</small></button>
+              <button onClick={onVerifyFiles} disabled={busy || !profile.installDir || !manifest.valid || manifest.requiredFileCount === 0}>
+                <ShieldCheck /> Verify files <small>SHA-256 manifest check</small>
+              </button>
               <button disabled><FolderOpen /> Open files <small>Native scope next</small></button>
               <button onClick={onOpenSettings}><Settings2 /> Settings <small>Paths & server</small></button>
             </div>
@@ -167,11 +194,11 @@ export function Dashboard({ profile, health, busy, onOpenSettings, onPlay }: Das
           <div className="placeholder-icon">
             {tab === "news" ? <Globe2 /> : tab === "rules" ? <ShieldCheck /> : <Clock3 />}
           </div>
-          <span className="eyebrow">MLLP PARITY MIGRATION</span>
-          <h2>{tab[0].toUpperCase() + tab.slice(1)} is queued for the manifest phase</h2>
+          <span className="eyebrow">TRUSTED MANIFEST READY</span>
+          <h2>{tab[0].toUpperCase() + tab.slice(1)} content is the next migration slice</h2>
           <p>
             This navigation is in place, but no placeholder production content is being presented as a finished feature.
-            The Rust manifest validator and trusted content pipeline come first.
+            Manifest v{manifest.manifestVersion} passed validation; structured {tab} rendering is not wired into this screen yet.
           </p>
         </section>
       )}

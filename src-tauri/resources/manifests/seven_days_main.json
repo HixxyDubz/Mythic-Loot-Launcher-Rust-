@@ -1,0 +1,28 @@
+{
+  "manifestVersion": "1.0",
+  "profileId": "seven_days_main",
+  "game": "seven_days",
+  "displayName": "7 Days To Die - Mythic Loot Server",
+  "serverName": "Mythic Loot 7 Days",
+  "serverIp": "",
+  "serverPort": 26900,
+  "requiredGameVersion": "1.0",
+  "modpackVersion": "1.0.0",
+  "updateUrl": "",
+  "updateSha256": "",
+  "updateParts": [],
+  "releaseDate": "2026-06-22",
+  "discordInvite": "",
+  "announcement": "",
+  "newsBannerPath": "",
+  "newsBannerUrl": "",
+  "rulesGuide": {
+    "howToJoin": "",
+    "rules": [],
+    "commonFixes": []
+  },
+  "changelog": [],
+  "files": [],
+  "obsoleteFiles": [],
+  "optionalFiles": []
+}

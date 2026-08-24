@@ -2,8 +2,10 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import type {
   BootstrapPayload,
   DetectedInstall,
+  FileVerification,
   GameProfile,
   LaunchOutcome,
+  ServerStatus,
 } from "./types";
 import { previewPayload } from "./mock";
 
@@ -31,6 +33,34 @@ export async function detectInstallations(profile: GameProfile): Promise<Detecte
   return runningInTauri
     ? invoke<DetectedInstall[]>("detect_installations", { profile })
     : [];
+}
+
+export async function refreshServerStatus(profile: GameProfile, useCache = true): Promise<ServerStatus> {
+  if (!runningInTauri) {
+    return {
+      profileId: profile.id,
+      configured: Boolean(profile.serverIp),
+      checked: false,
+      online: null,
+      players: null,
+      maxPlayers: null,
+      latencyMs: null,
+      version: "",
+      motd: "",
+      map: "",
+      message: "Native protocol checks are available in the Tauri app.",
+      cached: false,
+      checkedAtEpoch: null,
+    };
+  }
+  return invoke<ServerStatus>("refresh_server_status", { profile, useCache });
+}
+
+export async function verifyProfileFiles(profileId: string): Promise<FileVerification> {
+  if (!runningInTauri) {
+    throw new Error("File verification is only available in the native Tauri app.");
+  }
+  return invoke<FileVerification>("verify_profile_files", { profileId });
 }
 
 export async function launchProfile(profileId: string): Promise<LaunchOutcome> {

@@ -1,9 +1,31 @@
 use std::path::Path;
 
-use crate::models::{GameProfile, ProfileHealth, ReadinessStatus};
+use crate::{
+    manifest::ManifestSummary,
+    models::{GameProfile, ProfileHealth, ReadinessStatus},
+    server_status::ServerStatus,
+};
 
-pub fn assess(profile: &GameProfile) -> ProfileHealth {
+pub fn assess(
+    profile: &GameProfile,
+    manifest: Option<&ManifestSummary>,
+    server: Option<&ServerStatus>,
+) -> ProfileHealth {
     let mut details = Vec::new();
+    if let Some(manifest) = manifest {
+        if !manifest.valid {
+            return health(
+                profile,
+                ReadinessStatus::Failed,
+                "The modpack manifest is not safe to use",
+                manifest.errors.clone(),
+            );
+        }
+        details.push(format!(
+            "Manifest {} · {} required files",
+            manifest.manifest_version, manifest.required_file_count
+        ));
+    }
     let exe = profile.game_exe_path.trim();
     if exe.is_empty() {
         return health(
@@ -43,13 +65,17 @@ pub fn assess(profile: &GameProfile) -> ProfileHealth {
     }
     details.push("Modpack folder found".into());
 
-    if !profile.required_modpack_version.trim().is_empty()
-        && profile.local_modpack_version.trim() != profile.required_modpack_version.trim()
+    let required_version = manifest
+        .filter(|manifest| manifest.valid && !manifest.modpack_version.trim().is_empty())
+        .map(|manifest| manifest.modpack_version.as_str())
+        .unwrap_or(profile.required_modpack_version.as_str());
+    if !required_version.trim().is_empty()
+        && profile.local_modpack_version.trim() != required_version.trim()
     {
         details.push(format!(
             "Installed: {} · Required: {}",
             value_or_unknown(&profile.local_modpack_version),
-            profile.required_modpack_version
+            required_version
         ));
         return health(
             profile,
@@ -59,8 +85,21 @@ pub fn assess(profile: &GameProfile) -> ProfileHealth {
         );
     }
 
-    if profile.server_ip.trim().is_empty() {
-        details.push("Server address is not configured yet".into());
+    match server.and_then(|status| status.online) {
+        Some(false) => {
+            details.push(server.unwrap().message.clone());
+            return health(
+                profile,
+                ReadinessStatus::ServerOffline,
+                "The private server did not respond",
+                details,
+            );
+        }
+        Some(true) => details.push("Private server responded online".into()),
+        None if profile.server_ip.trim().is_empty() => {
+            details.push("Server address is not configured yet".into())
+        }
+        None => details.push("Server status has not been checked yet".into()),
     }
     health(profile, ReadinessStatus::Ready, "Ready to play", details)
 }
@@ -95,7 +134,10 @@ mod tests {
     #[test]
     fn defaults_are_honestly_setup_required() {
         for profile in LauncherConfig::default().profiles {
-            assert_eq!(assess(&profile).status, ReadinessStatus::SetupRequired);
+            assert_eq!(
+                assess(&profile, None, None).status,
+                ReadinessStatus::SetupRequired
+            );
         }
     }
 
@@ -107,6 +149,31 @@ mod tests {
         let mut profile = LauncherConfig::default().profiles.remove(0);
         profile.game_exe_path = exe.display().to_string();
         profile.install_dir = root.path().display().to_string();
-        assert_eq!(assess(&profile).status, ReadinessStatus::UpdateRequired);
+        assert_eq!(
+            assess(&profile, None, None).status,
+            ReadinessStatus::UpdateRequired
+        );
+    }
+
+    #[test]
+    fn invalid_manifests_are_a_hard_failure() {
+        let profile = LauncherConfig::default().profiles.remove(0);
+        let summary = ManifestSummary {
+            profile_id: profile.id.clone(),
+            valid: false,
+            manifest_version: "2.0".into(),
+            modpack_version: "1.0".into(),
+            release_date: String::new(),
+            required_file_count: 0,
+            optional_file_count: 0,
+            obsolete_file_count: 0,
+            update_size: None,
+            source: "fixture".into(),
+            errors: vec!["unsupported manifest".into()],
+        };
+        assert_eq!(
+            assess(&profile, Some(&summary), None).status,
+            ReadinessStatus::Failed
+        );
     }
 }
