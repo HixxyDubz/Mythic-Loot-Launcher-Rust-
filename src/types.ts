@@ -2,7 +2,6 @@ export type ReadinessStatus =
   | "ready"
   | "updateRequired"
   | "repairNeeded"
-  | "serverOffline"
   | "gamePathMissing"
   | "setupRequired"
   | "checking"
@@ -12,9 +11,6 @@ export interface GameProfile {
   id: string;
   game: string;
   displayName: string;
-  serverName: string;
-  serverIp: string;
-  serverPort: number;
   requiredGameVersion: string;
   requiredModpackVersion: string;
   localModpackVersion: string;
@@ -68,22 +64,6 @@ export interface ManifestSummary {
   errors: string[];
 }
 
-export interface ServerStatus {
-  profileId: string;
-  configured: boolean;
-  checked: boolean;
-  online: boolean | null;
-  players: number | null;
-  maxPlayers: number | null;
-  latencyMs: number | null;
-  version: string;
-  motd: string;
-  map: string;
-  message: string;
-  cached: boolean;
-  checkedAtEpoch: number | null;
-}
-
 export interface FileVerification {
   profileId: string;
   checked: number;
@@ -98,7 +78,6 @@ export interface BootstrapPayload {
   games: GameDefinition[];
   health: ProfileHealth[];
   manifests: ManifestSummary[];
-  servers: ServerStatus[];
   dataDir: string;
 }
 
@@ -112,5 +91,24 @@ export interface DetectedInstall {
 export interface LaunchOutcome {
   pid: number;
   message: string;
-  joinHint: string;
+}
+
+export interface PublisherStatus {
+  ghAvailable: boolean;
+  authenticated: boolean;
+  account: string;
+  message: string;
+}
+
+export interface RepositoryRequest {
+  repository: string;
+  description: string;
+  visibility: "private" | "public";
+  confirmed: boolean;
+}
+
+export interface RepositoryCreation {
+  repository: string;
+  url: string;
+  message: string;
 }

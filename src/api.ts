@@ -5,7 +5,9 @@ import type {
   FileVerification,
   GameProfile,
   LaunchOutcome,
-  ServerStatus,
+  PublisherStatus,
+  RepositoryCreation,
+  RepositoryRequest,
 } from "./types";
 import { previewPayload } from "./mock";
 
@@ -35,27 +37,6 @@ export async function detectInstallations(profile: GameProfile): Promise<Detecte
     : [];
 }
 
-export async function refreshServerStatus(profile: GameProfile, useCache = true): Promise<ServerStatus> {
-  if (!runningInTauri) {
-    return {
-      profileId: profile.id,
-      configured: Boolean(profile.serverIp),
-      checked: false,
-      online: null,
-      players: null,
-      maxPlayers: null,
-      latencyMs: null,
-      version: "",
-      motd: "",
-      map: "",
-      message: "Native protocol checks are available in the Tauri app.",
-      cached: false,
-      checkedAtEpoch: null,
-    };
-  }
-  return invoke<ServerStatus>("refresh_server_status", { profile, useCache });
-}
-
 export async function verifyProfileFiles(profileId: string): Promise<FileVerification> {
   if (!runningInTauri) {
     throw new Error("File verification is only available in the native Tauri app.");
@@ -68,4 +49,23 @@ export async function launchProfile(profileId: string): Promise<LaunchOutcome> {
     throw new Error("Game launch is only available in the native Tauri app.");
   }
   return invoke<LaunchOutcome>("launch_profile", { profileId });
+}
+
+export async function githubPublisherStatus(): Promise<PublisherStatus> {
+  if (!runningInTauri) {
+    return {
+      ghAvailable: false,
+      authenticated: false,
+      account: "",
+      message: "GitHub CLI preflight is only available in the native Developer app.",
+    };
+  }
+  return invoke<PublisherStatus>("github_publisher_status");
+}
+
+export async function createGithubRepository(request: RepositoryRequest): Promise<RepositoryCreation> {
+  if (!runningInTauri) {
+    throw new Error("Repository creation is only available in the native Developer app.");
+  }
+  return invoke<RepositoryCreation>("create_github_repository", { request });
 }

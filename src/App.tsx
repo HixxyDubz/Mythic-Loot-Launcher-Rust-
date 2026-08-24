@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
-import { bootstrap, detectInstallations, launchProfile, refreshServerStatus, saveProfile, selectProfile, verifyProfileFiles } from "./api";
+import { bootstrap, detectInstallations, launchProfile, saveProfile, selectProfile, verifyProfileFiles } from "./api";
 import { Dashboard } from "./components/Dashboard";
+import { PublisherPanel } from "./components/PublisherPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { Sidebar } from "./components/Sidebar";
 import { TitleBar } from "./components/TitleBar";
 import { previewHealth } from "./mock";
-import type { BootstrapPayload, DetectedInstall, FileVerification, GameProfile, ProfileHealth } from "./types";
+import type { BootstrapPayload, DetectedInstall, FileVerification, GameProfile } from "./types";
 
 function App() {
   const [payload, setPayload] = useState<BootstrapPayload | null>(null);
-  const [page, setPage] = useState<"dashboard" | "settings">("dashboard");
+  const [page, setPage] = useState<"dashboard" | "settings" | "publisher">("dashboard");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [fatalError, setFatalError] = useState("");
@@ -33,10 +34,6 @@ function App() {
   );
   const selectedManifest = useMemo(
     () => payload?.manifests.find((manifest) => manifest.profileId === payload.config.selectedProfileId),
-    [payload],
-  );
-  const selectedServer = useMemo(
-    () => payload?.servers.find((server) => server.profileId === payload.config.selectedProfileId),
     [payload],
   );
 
@@ -73,7 +70,7 @@ function App() {
           health: profiles.map(previewHealth),
         });
       }
-      setNotice("Server settings saved.");
+      setNotice("Modpack settings saved.");
       setPage("dashboard");
     } catch (error) {
       setNotice(errorMessage(error));
@@ -102,26 +99,7 @@ function App() {
     setNotice("");
     try {
       const result = await launchProfile(selectedProfile.id);
-      setNotice(result.joinHint ? `${result.message} ${result.joinHint}` : result.message);
-    } catch (error) {
-      setNotice(errorMessage(error));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function refreshStatus() {
-    if (!payload || !selectedProfile) return;
-    setBusy(true);
-    setNotice("");
-    try {
-      const server = await refreshServerStatus(selectedProfile);
-      setPayload({
-        ...payload,
-        servers: payload.servers.map((item) => item.profileId === server.profileId ? server : item),
-        health: payload.health.map((health) => updateServerHealth(health, server.online, server.message)),
-      });
-      setNotice(server.message);
+      setNotice(result.message);
     } catch (error) {
       setNotice(errorMessage(error));
     } finally {
@@ -167,10 +145,10 @@ function App() {
           <h1>The launcher could not open its native data</h1>
           <p>{fatalError}</p>
         </div>
-      ) : !payload || !selectedProfile || !selectedHealth || !selectedManifest || !selectedServer ? (
+      ) : !payload || !selectedProfile || !selectedHealth || !selectedManifest ? (
         <div className="loading-state">
           <img src="/assets/mythic-loot-logo.jpg" alt="" />
-          <span>Preparing your servers…</span>
+          <span>Preparing your modpacks…</span>
         </div>
       ) : (
         <div className="workspace">
@@ -180,9 +158,16 @@ function App() {
             selectedId={payload.config.selectedProfileId}
             onSelect={(id) => void chooseProfile(id)}
             onSettings={() => setPage("settings")}
+            onPublisher={() => setPage("publisher")}
           />
           <div className="content-region">
-            {page === "settings" ? (
+            {page === "publisher" ? (
+              <PublisherPanel
+                modpackName={selectedProfile.displayName}
+                onBack={() => setPage("dashboard")}
+                onNotice={setNotice}
+              />
+            ) : page === "settings" ? (
               <SettingsPanel
                 profile={selectedProfile}
                 dataDir={payload.dataDir}
@@ -197,12 +182,10 @@ function App() {
                 profile={selectedProfile}
                 health={selectedHealth}
                 manifest={selectedManifest}
-                server={selectedServer}
                 verification={verifications[selectedProfile.id]}
                 busy={busy}
                 onOpenSettings={() => setPage("settings")}
                 onPlay={() => void play()}
-                onRefreshStatus={() => void refreshStatus()}
                 onVerifyFiles={() => void verifyFiles()}
               />
             )}
@@ -212,16 +195,6 @@ function App() {
       )}
     </div>
   );
-}
-
-function updateServerHealth(health: ProfileHealth, online: boolean | null, message: string): ProfileHealth {
-  if (online === false && (health.status === "ready" || health.status === "serverOffline")) {
-    return { ...health, status: "serverOffline", headline: "The private server did not respond", details: [...health.details.filter((detail) => !detail.startsWith("Server")), message] };
-  }
-  if (online === true && health.status === "serverOffline") {
-    return { ...health, status: "ready", headline: "Ready to play", details: [...health.details.filter((detail) => !detail.startsWith("Server")), "Private server responded online"] };
-  }
-  return health;
 }
 
 function errorMessage(error: unknown): string {

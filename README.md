@@ -1,12 +1,14 @@
 # Mythic Loot Launcher
 
-The Tauri 2 rewrite of Mythic Loot Launcher. The native application core is Rust; the interface is React and TypeScript.
+The Tauri 2 rewrite of Mythic Loot Launcher. The native application core is Rust; the interface is React and TypeScript. It installs, verifies, updates and launches modpacks, with a planned Developer workflow for publishing those modpacks through GitHub.
 
 This repository is deliberately separate from **MLLP** (Mythic Loot Launcher Python). MLLP remains the behavioral reference until each feature is independently ported and verified here.
 
 ## Current status
 
-The new application has a working native shell, first-run profile store, built-in game catalogue, local installation detection, trusted v1 manifest validation, streaming SHA-256 file verification, native Minecraft/7DTD server checks, readiness assessment, profile editing, and native process launch. The complete parity position is tracked in [docs/PARITY_STATUS.md](docs/PARITY_STATUS.md).
+The application currently has a working native shell, server-free modpack profile store, built-in game catalogue, local installation detection, trusted v1 manifest validation, streaming SHA-256 file verification, readiness assessment, profile editing, and native game launch. The complete parity position is tracked in [docs/PARITY_STATUS.md](docs/PARITY_STATUS.md).
+
+Game servers are deliberately out of scope. The launcher does not query, configure, start, stop or directly join them; players use the game or another application for that.
 
 ## Development
 

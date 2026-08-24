@@ -3,14 +3,9 @@ use std::path::Path;
 use crate::{
     manifest::ManifestSummary,
     models::{GameProfile, ProfileHealth, ReadinessStatus},
-    server_status::ServerStatus,
 };
 
-pub fn assess(
-    profile: &GameProfile,
-    manifest: Option<&ManifestSummary>,
-    server: Option<&ServerStatus>,
-) -> ProfileHealth {
+pub fn assess(profile: &GameProfile, manifest: Option<&ManifestSummary>) -> ProfileHealth {
     let mut details = Vec::new();
     if let Some(manifest) = manifest {
         if !manifest.valid {
@@ -85,23 +80,12 @@ pub fn assess(
         );
     }
 
-    match server.and_then(|status| status.online) {
-        Some(false) => {
-            details.push(server.unwrap().message.clone());
-            return health(
-                profile,
-                ReadinessStatus::ServerOffline,
-                "The private server did not respond",
-                details,
-            );
-        }
-        Some(true) => details.push("Private server responded online".into()),
-        None if profile.server_ip.trim().is_empty() => {
-            details.push("Server address is not configured yet".into())
-        }
-        None => details.push("Server status has not been checked yet".into()),
-    }
-    health(profile, ReadinessStatus::Ready, "Ready to play", details)
+    health(
+        profile,
+        ReadinessStatus::Ready,
+        "Modpack is ready to launch",
+        details,
+    )
 }
 
 fn health(
@@ -135,7 +119,7 @@ mod tests {
     fn defaults_are_honestly_setup_required() {
         for profile in LauncherConfig::default().profiles {
             assert_eq!(
-                assess(&profile, None, None).status,
+                assess(&profile, None).status,
                 ReadinessStatus::SetupRequired
             );
         }
@@ -150,7 +134,7 @@ mod tests {
         profile.game_exe_path = exe.display().to_string();
         profile.install_dir = root.path().display().to_string();
         assert_eq!(
-            assess(&profile, None, None).status,
+            assess(&profile, None).status,
             ReadinessStatus::UpdateRequired
         );
     }
@@ -172,7 +156,7 @@ mod tests {
             errors: vec!["unsupported manifest".into()],
         };
         assert_eq!(
-            assess(&profile, Some(&summary), None).status,
+            assess(&profile, Some(&summary)).status,
             ReadinessStatus::Failed
         );
     }

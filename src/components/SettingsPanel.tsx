@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Check, HardDrive, Radar, Save, Server, X } from "lucide-react";
+import { ArrowLeft, Check, GitBranch, HardDrive, PackageOpen, Radar, Save, X } from "lucide-react";
 import type { DetectedInstall, GameProfile } from "../types";
 
 interface SettingsPanelProps {
@@ -32,8 +32,8 @@ export function SettingsPanel({
       <div className="settings-header">
         <button className="back-button" onClick={onBack}><ArrowLeft size={18} /> Back</button>
         <div>
-          <span className="eyebrow">SERVER SETTINGS</span>
-          <h1>{profile.serverName}</h1>
+          <span className="eyebrow">MODPACK SETTINGS</span>
+          <h1>{profile.displayName}</h1>
         </div>
         <button className="primary-action save-button" onClick={() => onSave(draft)} disabled={busy}>
           <Save size={17} /> {busy ? "Saving…" : "Save settings"}
@@ -42,12 +42,19 @@ export function SettingsPanel({
 
       <div className="settings-layout">
         <section className="settings-section panel-card">
-          <div className="section-title"><Server /><div><h2>Server identity</h2><p>Friend-facing name and connection details.</p></div></div>
+          <div className="section-title"><PackageOpen /><div><h2>Modpack identity</h2><p>The name and game shown to players.</p></div></div>
           <div className="form-grid">
             <Field label="Display name" value={draft.displayName} onChange={(value) => update("displayName", value)} />
-            <Field label="Server name" value={draft.serverName} onChange={(value) => update("serverName", value)} />
-            <Field label="Server address" value={draft.serverIp} placeholder="Leave blank until configured" onChange={(value) => update("serverIp", value)} />
-            <Field label="Server port" type="number" value={String(draft.serverPort)} onChange={(value) => update("serverPort", Math.max(1, Math.min(65535, Number(value) || 1)))} />
+            <Field label="Game adapter" value={draft.game} onChange={(value) => update("game", value)} />
+          </div>
+        </section>
+
+        <section className="settings-section panel-card">
+          <div className="section-title"><GitBranch /><div><h2>Distribution channel</h2><p>Dedicated GitHub release locations used to discover and download modpack updates.</p></div></div>
+          <div className="form-stack">
+            <Field label="Manifest URL" value={draft.manifestUrl} placeholder="https://github.com/owner/repo/releases/latest/download/manifest.json" onChange={(value) => update("manifestUrl", value)} />
+            <Field label="Package URL" value={draft.updateSource} placeholder="https://github.com/owner/repo/releases/download/v1.0.0/modpack.zip" onChange={(value) => update("updateSource", value)} />
+            <Field label="Local manifest path" value={draft.manifestPath} onChange={(value) => update("manifestPath", value)} />
           </div>
         </section>
 

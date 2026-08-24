@@ -1,4 +1,4 @@
-import { ChevronRight, Gamepad2, Plus, Settings } from "lucide-react";
+import { ChevronRight, CloudUpload, Gamepad2, Plus, Settings } from "lucide-react";
 import type { GameProfile, ProfileHealth } from "../types";
 
 interface SidebarProps {
@@ -7,20 +7,21 @@ interface SidebarProps {
   selectedId: string;
   onSelect: (id: string) => void;
   onSettings: () => void;
+  onPublisher: () => void;
 }
 
-export function Sidebar({ profiles, health, selectedId, onSelect, onSettings }: SidebarProps) {
+export function Sidebar({ profiles, health, selectedId, onSelect, onSettings, onPublisher }: SidebarProps) {
   return (
     <aside className="sidebar">
       <div className="brand-lockup">
         <img src="/assets/mythic-loot-wordmark.jpg" alt="Mythic Loot" />
-        <p>PRIVATE SERVER LAUNCHER</p>
+        <p>MODPACK LAUNCHER</p>
       </div>
       <div className="sidebar-heading">
-        <span>Your servers</span>
+        <span>Your modpacks</span>
         <span>{profiles.length}</span>
       </div>
-      <nav className="profile-list" aria-label="Server profiles">
+      <nav className="profile-list" aria-label="Modpack profiles">
         {profiles.map((profile) => {
           const state = health.find((item) => item.profileId === profile.id);
           const selected = profile.id === selectedId;
@@ -34,7 +35,7 @@ export function Sidebar({ profiles, health, selectedId, onSelect, onSettings }: 
                 <img src={profile.logoPath || "/assets/mythic-loot-logo.jpg"} alt="" />
               </span>
               <span className="profile-copy">
-                <strong>{profile.serverName || profile.displayName}</strong>
+                <strong>{profile.displayName}</strong>
                 <small>
                   <i className={`status-dot ${state?.status ?? "checking"}`} />
                   {state?.headline ?? "Checking"}
@@ -45,10 +46,13 @@ export function Sidebar({ profiles, health, selectedId, onSelect, onSettings }: 
           );
         })}
       </nav>
-      <button className="add-server" disabled title="Server creation is scheduled for the owner-tools migration">
-        <Plus size={16} /> Add server
+      <button className="add-modpack" disabled title="Modpack creation is scheduled for the publishing workspace">
+        <Plus size={16} /> Add modpack
       </button>
       <div className="sidebar-footer">
+        <button onClick={onPublisher}>
+          <CloudUpload size={17} /> Publisher
+        </button>
         <button onClick={onSettings}>
           <Settings size={17} /> Settings
         </button>

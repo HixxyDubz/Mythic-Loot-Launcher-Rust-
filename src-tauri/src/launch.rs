@@ -7,14 +7,7 @@ pub fn launch(profile: &GameProfile) -> Result<LaunchOutcome, String> {
     if !executable.is_file() {
         return Err("The configured game executable does not exist".into());
     }
-    let mut arguments = split_windows_args(&profile.launch_args)?;
-    let mut joins_directly = false;
-    if !profile.server_ip.trim().is_empty()
-        && let Some(join) = direct_join_args(profile)
-    {
-        arguments.extend(join);
-        joins_directly = true;
-    }
+    let arguments = split_windows_args(&profile.launch_args)?;
     let parent = executable
         .parent()
         .ok_or_else(|| "The game executable has no parent directory".to_string())?;
@@ -24,31 +17,10 @@ pub fn launch(profile: &GameProfile) -> Result<LaunchOutcome, String> {
         .spawn()
         .map_err(|error| format!("Could not start {}: {error}", profile.display_name))?;
 
-    let join_hint = if profile.server_ip.trim().is_empty() || joins_directly {
-        String::new()
-    } else {
-        format!(
-            "Join {}:{} from the in-game multiplayer menu.",
-            profile.server_ip, profile.server_port
-        )
-    };
     Ok(LaunchOutcome {
         pid: child.id(),
         message: format!("Started {}", profile.display_name),
-        join_hint,
     })
-}
-
-fn direct_join_args(profile: &GameProfile) -> Option<Vec<String>> {
-    let address = format!("{}:{}", profile.server_ip.trim(), profile.server_port);
-    match profile.game.as_str() {
-        "seven_days" => Some(vec![
-            format!("-connect={}", profile.server_ip.trim()),
-            format!("-port={}", profile.server_port),
-        ]),
-        "factorio" => Some(vec!["--mp-connect".into(), address]),
-        _ => None,
-    }
 }
 
 pub fn split_windows_args(input: &str) -> Result<Vec<String>, String> {
@@ -104,8 +76,8 @@ mod tests {
     #[test]
     fn preserves_quoted_windows_arguments() {
         assert_eq!(
-            split_windows_args(r#"--profile "My Server" --flag"#).unwrap(),
-            vec!["--profile", "My Server", "--flag"]
+            split_windows_args(r#"--profile "My Modpack" --flag"#).unwrap(),
+            vec!["--profile", "My Modpack", "--flag"]
         );
     }
 

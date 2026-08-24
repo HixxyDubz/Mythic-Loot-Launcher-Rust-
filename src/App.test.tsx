@@ -8,7 +8,15 @@ describe("Mythic Loot launcher shell", () => {
     expect(await screen.findByRole("heading", { name: "Mythic Loot Minecraft" })).toBeInTheDocument();
     expect(screen.getAllByText("Choose or detect the game client").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: /complete setup/i }));
-    expect(await screen.findByText("Server identity")).toBeInTheDocument();
+    expect(await screen.findByText("Modpack identity")).toBeInTheDocument();
     expect(screen.getByLabelText("Game or launcher executable")).toBeInTheDocument();
+  });
+
+  it("keeps GitHub repository creation behind preflight and preview", async () => {
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: /publisher/i }));
+    expect(await screen.findByRole("heading", { name: "GitHub Publisher" })).toBeInTheDocument();
+    expect(screen.getByText("Preflight required")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^create repository$/i })).not.toBeInTheDocument();
   });
 });

@@ -2,14 +2,14 @@ mod detection;
 mod launch;
 mod manifest;
 mod models;
+mod publisher;
 mod readiness;
 mod safe_path;
-mod server_status;
 mod storage;
 
 use manifest::FileVerification;
 use models::{BootstrapPayload, DetectedInstall, GameProfile, LaunchOutcome, ReadinessStatus};
-use server_status::ServerStatus;
+use publisher::{PublisherStatus, RepositoryCreation, RepositoryRequest};
 use tauri::{AppHandle, Manager};
 
 fn payload(app: &AppHandle) -> Result<BootstrapPayload, String> {
@@ -20,26 +20,17 @@ fn payload(app: &AppHandle) -> Result<BootstrapPayload, String> {
         .map(|profile| manifest::load_for_profile(app, profile))
         .collect();
     let manifests: Vec<_> = loaded.iter().map(|loaded| loaded.summary.clone()).collect();
-    let servers: Vec<_> = config
-        .profiles
-        .iter()
-        .map(ServerStatus::not_checked)
-        .collect();
     let health = config
         .profiles
         .iter()
         .zip(manifests.iter())
-        .zip(servers.iter())
-        .map(|((profile, manifest), server)| {
-            readiness::assess(profile, Some(manifest), Some(server))
-        })
+        .map(|(profile, manifest)| readiness::assess(profile, Some(manifest)))
         .collect();
     Ok(BootstrapPayload {
         config,
         games: models::built_in_games(),
         health,
         manifests,
-        servers,
         data_dir: storage::data_dir(app)?.display().to_string(),
     })
 }
@@ -57,7 +48,7 @@ fn select_profile(app: AppHandle, profile_id: String) -> Result<BootstrapPayload
         .iter()
         .any(|profile| profile.id == profile_id)
     {
-        return Err("That server profile does not exist".into());
+        return Err("That modpack profile does not exist".into());
     }
     config.selected_profile_id = profile_id;
     storage::save(&app, &config)?;
@@ -67,7 +58,7 @@ fn select_profile(app: AppHandle, profile_id: String) -> Result<BootstrapPayload
 #[tauri::command]
 fn save_profile(app: AppHandle, profile: GameProfile) -> Result<BootstrapPayload, String> {
     if profile.id.trim().is_empty() || profile.display_name.trim().is_empty() {
-        return Err("A server profile requires an id and display name".into());
+        return Err("A modpack profile requires an id and display name".into());
     }
     if manifest::is_discord_invite(&profile.update_source)
         || manifest::is_discord_invite(&profile.manifest_url)
@@ -93,13 +84,19 @@ fn detect_installations(profile: GameProfile) -> Vec<DetectedInstall> {
 }
 
 #[tauri::command]
-async fn refresh_server_status(
-    profile: GameProfile,
-    use_cache: bool,
-) -> Result<ServerStatus, String> {
-    tauri::async_runtime::spawn_blocking(move || server_status::query(&profile, use_cache))
+async fn github_publisher_status() -> Result<PublisherStatus, String> {
+    tauri::async_runtime::spawn_blocking(publisher::status)
         .await
-        .map_err(|error| format!("server status task failed: {error}"))
+        .map_err(|error| format!("GitHub preflight task failed: {error}"))
+}
+
+#[tauri::command]
+async fn create_github_repository(
+    request: RepositoryRequest,
+) -> Result<RepositoryCreation, String> {
+    tauri::async_runtime::spawn_blocking(move || publisher::create_repository(&request))
+        .await
+        .map_err(|error| format!("GitHub repository task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -112,7 +109,7 @@ async fn verify_profile_files(
         .profiles
         .into_iter()
         .find(|profile| profile.id == profile_id)
-        .ok_or_else(|| "That server profile does not exist".to_string())?;
+        .ok_or_else(|| "That modpack profile does not exist".to_string())?;
     let loaded = manifest::load_for_profile(&app, &profile);
     if !loaded.summary.valid {
         return Err(loaded.summary.errors.join("; "));
@@ -131,9 +128,9 @@ fn launch_profile(app: AppHandle, profile_id: String) -> Result<LaunchOutcome, S
         .profiles
         .iter()
         .find(|profile| profile.id == profile_id)
-        .ok_or_else(|| "That server profile does not exist".to_string())?;
+        .ok_or_else(|| "That modpack profile does not exist".to_string())?;
     let loaded = manifest::load_for_profile(&app, profile);
-    let health = readiness::assess(profile, Some(&loaded.summary), None);
+    let health = readiness::assess(profile, Some(&loaded.summary));
     if health.status != ReadinessStatus::Ready {
         return Err(format!(
             "{} is not ready: {}",
@@ -164,7 +161,8 @@ pub fn run() {
             select_profile,
             save_profile,
             detect_installations,
-            refresh_server_status,
+            github_publisher_status,
+            create_github_repository,
             verify_profile_files,
             launch_profile
         ])

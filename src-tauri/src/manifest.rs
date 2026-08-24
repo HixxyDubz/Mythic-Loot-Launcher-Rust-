@@ -37,9 +37,6 @@ pub struct Manifest {
     pub profile_id: String,
     pub game: String,
     pub display_name: String,
-    pub server_name: String,
-    pub server_ip: String,
-    pub server_port: u16,
     pub required_game_version: String,
     pub modpack_version: String,
     pub update_url: String,
@@ -202,9 +199,6 @@ pub fn validate(manifest: &Manifest, expected: Option<&GameProfile>) -> Vec<Stri
                 manifest.game, profile.game
             ));
         }
-    }
-    if !manifest.server_ip.trim().is_empty() && manifest.server_port == 0 {
-        errors.push("serverPort must be between 1 and 65535 when serverIp is set".into());
     }
     validate_url(&manifest.update_url, "updateUrl", false, &mut errors);
     validate_url(

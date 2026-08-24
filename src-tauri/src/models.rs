@@ -6,9 +6,6 @@ pub struct GameProfile {
     pub id: String,
     pub game: String,
     pub display_name: String,
-    pub server_name: String,
-    pub server_ip: String,
-    pub server_port: u16,
     pub required_game_version: String,
     pub required_modpack_version: String,
     pub local_modpack_version: String,
@@ -54,7 +51,7 @@ pub struct LauncherConfig {
 impl Default for LauncherConfig {
     fn default() -> Self {
         Self {
-            schema_version: 1,
+            schema_version: 2,
             selected_profile_id: "minecraft_main".into(),
             profiles: vec![minecraft_profile(), seven_days_profile()],
             preferences: LauncherPreferences::default(),
@@ -66,10 +63,7 @@ fn minecraft_profile() -> GameProfile {
     GameProfile {
         id: "minecraft_main".into(),
         game: "minecraft".into(),
-        display_name: "Minecraft - Mythic Loot Server".into(),
-        server_name: "Mythic Loot Minecraft".into(),
-        server_ip: String::new(),
-        server_port: 25565,
+        display_name: "Mythic Loot Minecraft".into(),
         required_game_version: "1.21.1".into(),
         required_modpack_version: "1.0.1".into(),
         local_modpack_version: String::new(),
@@ -90,10 +84,7 @@ fn seven_days_profile() -> GameProfile {
     GameProfile {
         id: "seven_days_main".into(),
         game: "seven_days".into(),
-        display_name: "7 Days To Die - Mythic Loot Server".into(),
-        server_name: "Mythic Loot 7 Days".into(),
-        server_ip: String::new(),
-        server_port: 26900,
+        display_name: "Mythic Loot 7 Days".into(),
         required_game_version: "1.0".into(),
         required_modpack_version: "1.0.0".into(),
         local_modpack_version: String::new(),
@@ -157,7 +148,6 @@ pub enum ReadinessStatus {
     Ready,
     UpdateRequired,
     RepairNeeded,
-    ServerOffline,
     GamePathMissing,
     SetupRequired,
     Checking,
@@ -180,7 +170,6 @@ pub struct BootstrapPayload {
     pub games: Vec<GameDefinition>,
     pub health: Vec<ProfileHealth>,
     pub manifests: Vec<crate::manifest::ManifestSummary>,
-    pub servers: Vec<crate::server_status::ServerStatus>,
     pub data_dir: String,
 }
 
@@ -189,5 +178,4 @@ pub struct BootstrapPayload {
 pub struct LaunchOutcome {
     pub pid: u32,
     pub message: String,
-    pub join_hint: String,
 }

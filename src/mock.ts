@@ -1,13 +1,10 @@
-import type { BootstrapPayload, GameProfile, ManifestSummary, ProfileHealth, ServerStatus } from "./types";
+import type { BootstrapPayload, GameProfile, ManifestSummary, ProfileHealth } from "./types";
 
 export const previewProfiles: GameProfile[] = [
   {
     id: "minecraft_main",
     game: "minecraft",
-    displayName: "Minecraft - Mythic Loot Server",
-    serverName: "Mythic Loot Minecraft",
-    serverIp: "",
-    serverPort: 25565,
+    displayName: "Mythic Loot Minecraft",
     requiredGameVersion: "1.21.1",
     requiredModpackVersion: "1.0.1",
     localModpackVersion: "",
@@ -27,10 +24,7 @@ export const previewProfiles: GameProfile[] = [
   {
     id: "seven_days_main",
     game: "seven_days",
-    displayName: "7 Days To Die - Mythic Loot Server",
-    serverName: "Mythic Loot 7 Days",
-    serverIp: "",
-    serverPort: 26900,
+    displayName: "Mythic Loot 7 Days",
     requiredGameVersion: "1.0",
     requiredModpackVersion: "1.0.0",
     localModpackVersion: "",
@@ -81,7 +75,7 @@ export function previewHealth(profile: GameProfile): ProfileHealth {
   return {
     profileId: profile.id,
     status: "ready",
-    headline: "Ready to play",
+    headline: "Modpack is ready to launch",
     details: ["Game client found", "Modpack folder found"],
   };
 }
@@ -100,24 +94,9 @@ export function previewPayload(): BootstrapPayload {
     source: "bundled launcher manifest",
     errors: [],
   }));
-  const servers: ServerStatus[] = previewProfiles.map((profile) => ({
-    profileId: profile.id,
-    configured: Boolean(profile.serverIp),
-    checked: false,
-    online: null,
-    players: null,
-    maxPlayers: null,
-    latencyMs: null,
-    version: "",
-    motd: "",
-    map: "",
-    message: "Add the private server address in settings",
-    cached: false,
-    checkedAtEpoch: null,
-  }));
   return {
     config: {
-      schemaVersion: 1,
+      schemaVersion: 2,
       selectedProfileId: "minecraft_main",
       profiles: structuredClone(previewProfiles),
       preferences: {
@@ -142,7 +121,6 @@ export function previewPayload(): BootstrapPayload {
     ].map(([id, displayName, detectionKind]) => ({ id, displayName, detectionKind })),
     health: previewProfiles.map(previewHealth),
     manifests,
-    servers,
     dataDir: "Browser preview · native persistence is available in the Tauri app",
   };
 }

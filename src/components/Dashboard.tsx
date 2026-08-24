@@ -8,14 +8,14 @@ import {
   FolderOpen,
   Gamepad2,
   Globe2,
+  PackageOpen,
   RefreshCw,
-  Server,
   Settings2,
   ShieldCheck,
   Sparkles,
   Wrench,
 } from "lucide-react";
-import type { FileVerification, GameProfile, ManifestSummary, ProfileHealth, ReadinessStatus, ServerStatus } from "../types";
+import type { FileVerification, GameProfile, ManifestSummary, ProfileHealth, ReadinessStatus } from "../types";
 
 type DetailTab = "overview" | "news" | "changelog" | "rules";
 
@@ -23,12 +23,10 @@ interface DashboardProps {
   profile: GameProfile;
   health: ProfileHealth;
   manifest: ManifestSummary;
-  server: ServerStatus;
   verification?: FileVerification;
   busy: boolean;
   onOpenSettings: () => void;
   onPlay: () => void;
-  onRefreshStatus: () => void;
   onVerifyFiles: () => void;
 }
 
@@ -36,26 +34,15 @@ const labels: Record<ReadinessStatus, string> = {
   ready: "READY",
   updateRequired: "UPDATE REQUIRED",
   repairNeeded: "REPAIR NEEDED",
-  serverOffline: "SERVER OFFLINE",
   gamePathMissing: "PATH MISSING",
   setupRequired: "SETUP REQUIRED",
   checking: "CHECKING",
   failed: "CHECK FAILED",
 };
 
-export function Dashboard({ profile, health, manifest, server, verification, busy, onOpenSettings, onPlay, onRefreshStatus, onVerifyFiles }: DashboardProps) {
+export function Dashboard({ profile, health, manifest, verification, busy, onOpenSettings, onPlay, onVerifyFiles }: DashboardProps) {
   const [tab, setTab] = useState<DetailTab>("overview");
   const ready = health.status === "ready";
-  const serverAddress = profile.serverIp
-    ? `${profile.serverIp}:${profile.serverPort}`
-    : "Not configured";
-  const serverValue = !server.configured
-    ? "Not configured"
-    : !server.checked
-      ? "Not checked"
-      : server.online
-        ? `${server.players ?? "?"}/${server.maxPlayers ?? "?"} players`
-        : "Offline";
   const verificationValue = verification
     ? `${verification.current}/${verification.checked} current`
     : `${manifest.requiredFileCount.toLocaleString()} tracked`;
@@ -64,8 +51,8 @@ export function Dashboard({ profile, health, manifest, server, verification, bus
     <main className="dashboard">
       <div className="dashboard-topline">
         <div>
-          <span className="eyebrow">SERVER OVERVIEW</span>
-          <h1>{profile.serverName || profile.displayName}</h1>
+          <span className="eyebrow">MODPACK OVERVIEW</span>
+          <h1>{profile.displayName}</h1>
         </div>
         <div className={`readiness-pill ${health.status}`}>
           <i /> {labels[health.status]}
@@ -93,8 +80,8 @@ export function Dashboard({ profile, health, manifest, server, verification, bus
               <h2>{health.headline}</h2>
               <p>
                 {ready
-                  ? "The configured client and modpack version passed the current Rust readiness gates."
-                  : "Finish the highlighted setup before the launcher will start this game."}
+                  ? "This local installation matches the trusted modpack version and is ready to launch."
+                  : "Finish the highlighted local setup before launching the game."}
               </p>
               <div className="hero-actions">
                 <button className="primary-action" onClick={ready ? onPlay : onOpenSettings} disabled={busy}>
@@ -114,7 +101,7 @@ export function Dashboard({ profile, health, manifest, server, verification, bus
             <div className="panel-heading">
               <div>
                 <span className="eyebrow">READINESS</span>
-                <h3>Can I play right now?</h3>
+                <h3>Is this installation current?</h3>
               </div>
               {ready ? <ShieldCheck className="good" /> : <CircleAlert className="warn" />}
             </div>
@@ -142,34 +129,25 @@ export function Dashboard({ profile, health, manifest, server, verification, bus
                   profile.localModpackVersion === manifest.modpackVersion
                 }
               />
-              <ReadinessRow
-                label="Live server check"
-                value={serverValue}
-                complete={server.online === true}
-                pending={!server.checked || server.online === null}
-              />
             </div>
           </section>
 
-          <section className="server-card panel-card">
+          <section className="pack-card panel-card">
             <div className="panel-heading">
               <div>
-                <span className="eyebrow">CONNECTION</span>
-                <h3>Server details</h3>
+                <span className="eyebrow">PACKAGE</span>
+                <h3>Modpack details</h3>
               </div>
-              <Server />
+              <PackageOpen />
             </div>
-            <dl className="server-facts">
-              <div><dt>Address</dt><dd>{serverAddress}</dd></div>
+            <dl className="pack-facts">
+              <div><dt>Game adapter</dt><dd>{profile.game}</dd></div>
               <div><dt>Game version</dt><dd>{profile.requiredGameVersion || "Not specified"}</dd></div>
-              <div><dt>Required pack</dt><dd>{manifest.modpackVersion || profile.requiredModpackVersion || "Not specified"}</dd></div>
+              <div><dt>Pack version</dt><dd>{manifest.modpackVersion || profile.requiredModpackVersion || "Not specified"}</dd></div>
               <div><dt>Manifest files</dt><dd>{verificationValue}</dd></div>
-              {server.map && <div><dt>Current map</dt><dd>{server.map}</dd></div>}
-              {server.latencyMs !== null && <div><dt>Response</dt><dd>{server.latencyMs} ms{server.cached ? " · cached" : ""}</dd></div>}
+              <div><dt>Released</dt><dd>{manifest.releaseDate || "Not specified"}</dd></div>
+              <div><dt>Update channel</dt><dd>{profile.manifestUrl.includes("github.com") ? "GitHub Releases" : "Not configured"}</dd></div>
             </dl>
-            <button className="inline-action" onClick={onRefreshStatus} disabled={busy || !server.configured}>
-              <RefreshCw size={14} className={busy ? "spin" : ""} /> Refresh server status
-            </button>
           </section>
 
           <section className="quick-card panel-card">
@@ -185,7 +163,7 @@ export function Dashboard({ profile, health, manifest, server, verification, bus
                 <ShieldCheck /> Verify files <small>SHA-256 manifest check</small>
               </button>
               <button disabled><FolderOpen /> Open files <small>Native scope next</small></button>
-              <button onClick={onOpenSettings}><Settings2 /> Settings <small>Paths & server</small></button>
+              <button onClick={onOpenSettings}><Settings2 /> Settings <small>Paths & updates</small></button>
             </div>
           </section>
         </div>
@@ -198,7 +176,7 @@ export function Dashboard({ profile, health, manifest, server, verification, bus
           <h2>{tab[0].toUpperCase() + tab.slice(1)} content is the next migration slice</h2>
           <p>
             This navigation is in place, but no placeholder production content is being presented as a finished feature.
-            Manifest v{manifest.manifestVersion} passed validation; structured {tab} rendering is not wired into this screen yet.
+            Manifest v{manifest.manifestVersion} passed validation; structured modpack {tab} rendering is not wired into this screen yet.
           </p>
         </section>
       )}
