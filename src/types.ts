@@ -150,3 +150,40 @@ export interface ReleasePublication {
   url: string;
   message: string;
 }
+
+export type TransactionKind = "update" | "repair";
+
+export interface TransactionRequest {
+  profileId: string;
+  kind: TransactionKind;
+}
+
+export interface TransactionPreview {
+  previewId: string;
+  profileId: string;
+  kind: TransactionKind;
+  version: string;
+  source: string;
+  stagedFiles: number;
+  stagedBytes: number;
+  existingFilesToBackup: number;
+  newFiles: number;
+  obsoletePaths: number;
+  issues: string[];
+  ready: boolean;
+  nothingToDo: boolean;
+  message: string;
+}
+
+export interface TransactionOutcome {
+  profileId: string;
+  kind: TransactionKind;
+  success: boolean;
+  applied: string[];
+  removed: string[];
+  backupPath: string;
+  rolledBack: boolean;
+  rollbackError: string;
+  message: string;
+  error: string;
+}

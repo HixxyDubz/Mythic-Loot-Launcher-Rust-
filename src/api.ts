@@ -11,6 +11,9 @@ import type {
   ReleasePublication,
   RepositoryCreation,
   RepositoryRequest,
+  TransactionOutcome,
+  TransactionPreview,
+  TransactionRequest,
 } from "./types";
 import { previewPayload } from "./mock";
 
@@ -88,4 +91,23 @@ export async function publishModpackRelease(
     throw new Error("GitHub release publishing is only available in the native Developer app.");
   }
   return invoke<ReleasePublication>("publish_modpack_release", { previewId, confirmed });
+}
+
+export async function prepareModpackTransaction(
+  request: TransactionRequest,
+): Promise<TransactionPreview> {
+  if (!runningInTauri) {
+    throw new Error("Safe update staging is only available in the native Tauri app.");
+  }
+  return invoke<TransactionPreview>("prepare_modpack_transaction", { request });
+}
+
+export async function applyModpackTransaction(
+  previewId: string,
+  confirmed: boolean,
+): Promise<TransactionOutcome> {
+  if (!runningInTauri) {
+    throw new Error("Modpack updates and repairs are only available in the native Tauri app.");
+  }
+  return invoke<TransactionOutcome>("apply_modpack_transaction", { previewId, confirmed });
 }

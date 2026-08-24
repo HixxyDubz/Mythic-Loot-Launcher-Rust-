@@ -28,6 +28,8 @@ regex = "1.13"
 walkdir = "2.5"
 time = { version = "0.3", features = ["formatting"] }
 zip = { version = "8.6", default-features = false, features = ["deflate"] }
+fs2 = "0.4"
+ureq = "3.4"
 
 [dev-dependencies]
 tempfile = "3"

@@ -28,6 +28,7 @@ interface DashboardProps {
   onOpenSettings: () => void;
   onPlay: () => void;
   onVerifyFiles: () => void;
+  onOpenUpdates: () => void;
 }
 
 const labels: Record<ReadinessStatus, string> = {
@@ -40,7 +41,7 @@ const labels: Record<ReadinessStatus, string> = {
   failed: "CHECK FAILED",
 };
 
-export function Dashboard({ profile, health, manifest, verification, busy, onOpenSettings, onPlay, onVerifyFiles }: DashboardProps) {
+export function Dashboard({ profile, health, manifest, verification, busy, onOpenSettings, onPlay, onVerifyFiles, onOpenUpdates }: DashboardProps) {
   const [tab, setTab] = useState<DetailTab>("overview");
   const ready = health.status === "ready";
   const verificationValue = verification
@@ -158,7 +159,9 @@ export function Dashboard({ profile, health, manifest, verification, busy, onOpe
               </div>
             </div>
             <div className="quick-actions">
-              <button disabled><Download /> Update <small>Port scheduled</small></button>
+              <button onClick={onOpenUpdates} disabled={busy || !profile.installDir || !manifest.valid}>
+                <Download /> Update & repair <small>Staged native transaction</small>
+              </button>
               <button onClick={onVerifyFiles} disabled={busy || !profile.installDir || !manifest.valid || manifest.requiredFileCount === 0}>
                 <ShieldCheck /> Verify files <small>SHA-256 manifest check</small>
               </button>

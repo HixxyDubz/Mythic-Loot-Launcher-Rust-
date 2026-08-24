@@ -9,8 +9,8 @@ Rust application core
   -> local configuration and recovery
   -> game/modpack detection and local readiness
   -> validated process launch
-  -> manifest verification and local-first publishing services
-  -> future transactional update/backup services
+  -> manifest verification and transactional update/repair services
+  -> local-first publishing services
 Windows, filesystem, game launchers and GitHub CLI
 ```
 
@@ -26,6 +26,7 @@ React does not receive arbitrary shell or filesystem access. Native operations a
 - `safe_path.rs`: traversal, Windows alias, alternate-stream and archive-member rejection.
 - `publisher.rs`: shell-free GitHub CLI preflight and fail-closed repository creation after explicit confirmation.
 - `packager.rs`: source-folder exclusions/privacy audit, deterministic ZIP and manifest generation, native release-plan caching, asset re-verification and explicitly confirmed immutable GitHub Release publication.
+- `updater.rs`: trusted local/HTTPS and multipart package acquisition, archive validation, isolated changed-file staging, native preview caching, disk-space checks, pre-change ZIP backup, confirmed apply, post-verification and journaled rollback.
 - `launch.rs`: validated native process start and Windows-aware argument parsing; it never generates server connection arguments.
 - `lib.rs`: narrow command boundary and main-window startup assertion.
 
@@ -33,7 +34,7 @@ React does not receive arbitrary shell or filesystem access. Native operations a
 
 - `api.ts`: typed IPC facade with a browser-only design preview fallback.
 - `App.tsx`: application orchestration and error/notice states.
-- `components/`: title bar, modpack navigation, dashboard and settings.
+- `components/`: title bar, modpack navigation, dashboard, settings, publisher, and staged update/repair workspace.
 - `types.ts`: IPC data contract mirrored from Rust.
 - `mock.ts`: explicit browser-preview data; never used as native production persistence.
 
@@ -41,9 +42,11 @@ React does not receive arbitrary shell or filesystem access. Native operations a
 
 The native store resolves through Tauri's application data directory. `MYTHIC_LOOT_DATA_DIR` overrides it only when explicitly set, which supports portable development and isolated acceptance runs. Invalid JSON is renamed to a timestamped `launcher-config.corrupt-*.json` before a fresh default is created.
 
-## Next backend sequence
+## Transaction boundary
 
-The transactional updater builds on the trusted manifest layer, using stage/verify/backup/apply/post-verify/rollback. GitHub publishing is a separate Developer workflow: local preparation scans privacy and produces reviewed artifacts without authentication; repository creation and release publication use authenticated `gh` state and separate explicit confirmations. The native release command accepts only a cached preview identifier, not arbitrary asset paths, and re-hashes the cached assets at action time. Player builds will only consume reviewed release metadata and must not contain publishing controls.
+Update preparation resolves the trusted manifest, downloads or copies the package into launcher-owned storage, rejects unsafe ZIP members, extracts only required changed files, and verifies the staged SHA-256 inventory before returning a preview. Apply accepts only that cached preview identifier plus explicit confirmation. It revalidates staged files, creates a backup of affected live paths, journals new paths, applies replacements/removals, verifies the complete live manifest, and restores overwritten, created, obsolete, and version-marker state if any apply or finalization step fails.
+
+GitHub publishing is a separate Developer workflow: local preparation scans privacy and produces reviewed artifacts without authentication; repository creation and release publication use authenticated `gh` state and separate explicit confirmations. The native release command accepts only a cached preview identifier, not arbitrary asset paths, and re-hashes the cached assets at action time. Player builds will only consume reviewed release metadata and must not contain publishing controls.
 
 ## Explicit non-responsibility
 

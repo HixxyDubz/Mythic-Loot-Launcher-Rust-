@@ -6,12 +6,13 @@ import { PublisherPanel } from "./components/PublisherPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { Sidebar } from "./components/Sidebar";
 import { TitleBar } from "./components/TitleBar";
+import { UpdatePanel } from "./components/UpdatePanel";
 import { previewHealth } from "./mock";
 import type { BootstrapPayload, DetectedInstall, FileVerification, GameProfile } from "./types";
 
 function App() {
   const [payload, setPayload] = useState<BootstrapPayload | null>(null);
-  const [page, setPage] = useState<"dashboard" | "settings" | "publisher">("dashboard");
+  const [page, setPage] = useState<"dashboard" | "settings" | "publisher" | "update">("dashboard");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [fatalError, setFatalError] = useState("");
@@ -136,6 +137,16 @@ function App() {
     }
   }
 
+  async function refreshAfterTransaction() {
+    const refreshed = await bootstrap();
+    setPayload(refreshed);
+    setVerifications((current) => {
+      const next = { ...current };
+      if (selectedProfile) delete next[selectedProfile.id];
+      return next;
+    });
+  }
+
   return (
     <div className="app-shell">
       <TitleBar />
@@ -167,6 +178,15 @@ function App() {
                 onBack={() => setPage("dashboard")}
                 onNotice={setNotice}
               />
+            ) : page === "update" ? (
+              <UpdatePanel
+                profile={selectedProfile}
+                health={selectedHealth}
+                manifest={selectedManifest}
+                onBack={() => setPage("dashboard")}
+                onNotice={setNotice}
+                onCompleted={() => refreshAfterTransaction()}
+              />
             ) : page === "settings" ? (
               <SettingsPanel
                 profile={selectedProfile}
@@ -187,6 +207,7 @@ function App() {
                 onOpenSettings={() => setPage("settings")}
                 onPlay={() => void play()}
                 onVerifyFiles={() => void verifyFiles()}
+                onOpenUpdates={() => setPage("update")}
               />
             )}
           </div>

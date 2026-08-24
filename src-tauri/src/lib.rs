@@ -7,12 +7,14 @@ mod publisher;
 mod readiness;
 mod safe_path;
 mod storage;
+mod updater;
 
 use manifest::FileVerification;
 use models::{BootstrapPayload, DetectedInstall, GameProfile, LaunchOutcome, ReadinessStatus};
 use packager::{PackagePreview, PackageRequest, ReleasePublication};
 use publisher::{PublisherStatus, RepositoryCreation, RepositoryRequest};
 use tauri::{AppHandle, Manager};
+use updater::{TransactionOutcome, TransactionPreview, TransactionRequest};
 
 fn payload(app: &AppHandle) -> Result<BootstrapPayload, String> {
     let config = storage::load_or_create(app)?;
@@ -122,6 +124,27 @@ async fn publish_modpack_release(
 }
 
 #[tauri::command]
+async fn prepare_modpack_transaction(
+    app: AppHandle,
+    request: TransactionRequest,
+) -> Result<TransactionPreview, String> {
+    tauri::async_runtime::spawn_blocking(move || updater::prepare(&app, &request))
+        .await
+        .map_err(|error| format!("Modpack staging task failed: {error}"))?
+}
+
+#[tauri::command]
+async fn apply_modpack_transaction(
+    app: AppHandle,
+    preview_id: String,
+    confirmed: bool,
+) -> Result<TransactionOutcome, String> {
+    tauri::async_runtime::spawn_blocking(move || updater::apply(&app, &preview_id, confirmed))
+        .await
+        .map_err(|error| format!("Modpack transaction task failed: {error}"))?
+}
+
+#[tauri::command]
 async fn verify_profile_files(
     app: AppHandle,
     profile_id: String,
@@ -187,6 +210,8 @@ pub fn run() {
             create_github_repository,
             prepare_modpack_release,
             publish_modpack_release,
+            prepare_modpack_transaction,
+            apply_modpack_transaction,
             verify_profile_files,
             launch_profile
         ])
