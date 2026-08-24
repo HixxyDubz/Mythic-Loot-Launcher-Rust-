@@ -213,6 +213,34 @@ h1, h2, h3, p { margin-top: 0; }
 .transaction-outcome > div { min-width: 0; }
 .transaction-outcome small { display: block; margin-top: 6px; overflow: hidden; text-overflow: ellipsis; color: #756a82; font-size: 8px; white-space: nowrap; }
 .transaction-outcome .outcome-error { color: #e0a2aa; white-space: normal; }
+.restore-history .section-title { align-items: center; }
+.restore-history .section-title > div { min-width: 0; flex: 1; }
+.restore-empty { display: flex; align-items: center; gap: 12px; padding: 14px; border: 1px dashed rgba(149,116,189,.18); border-radius: 9px; color: #796c87; }
+.restore-empty > svg { width: 22px; color: #6f5a86; }
+.restore-empty span { display: grid; gap: 3px; }
+.restore-empty strong { color: #b7a9c5; font-size: 10px; }
+.restore-empty small { font-size: 8px; line-height: 1.45; }
+.restore-list { display: grid; gap: 8px; }
+.restore-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 11px 12px; border: 1px solid rgba(149,116,189,.13); border-radius: 9px; background: rgba(255,255,255,.018); }
+.restore-row > svg { width: 19px; color: var(--purple-bright); }
+.restore-row.invalid { border-color: rgba(255,113,132,.18); }
+.restore-row.invalid > svg { color: var(--red); }
+.restore-copy { min-width: 0; display: grid; gap: 3px; }
+.restore-copy strong { overflow: hidden; color: #d8cfdf; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.restore-copy small { overflow: hidden; color: #786c85; font-size: 8px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.restore-copy .outcome-error { color: #e0a2aa; white-space: normal; }
+.restore-actions, .delete-actions { display: flex; align-items: center; gap: 7px; }
+.restore-actions .secondary-action { min-width: 95px; padding: 8px 10px; font-size: 8px; }
+.icon-danger { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid rgba(255,113,132,.18); border-radius: 7px; background: rgba(255,113,132,.035); color: #bd7781; }
+.icon-danger:hover:not(:disabled) { border-color: rgba(255,113,132,.4); color: #f4a4af; }
+.restore-preview .danger-action { width: 100%; margin-top: 12px; }
+.delete-restore-confirmation { display: grid; grid-template-columns: 30px 1fr; gap: 10px; border-color: rgba(255,113,132,.24); }
+.delete-restore-confirmation > svg { color: var(--red); }
+.delete-restore-confirmation h2 { margin: 0 0 4px; font-size: 14px; }
+.delete-restore-confirmation p { margin: 0; color: #8e809c; font-size: 9px; line-height: 1.5; }
+.delete-restore-confirmation .confirmation-row, .delete-restore-confirmation .delete-actions { grid-column: 1 / -1; }
+.delete-actions { justify-content: flex-end; }
+.delete-actions button { min-width: 145px; }
 .creation-result { display: flex; align-items: center; gap: 13px; }
 .creation-result > svg { color: var(--green); }
 .creation-result h2 { margin: 0 0 4px; font-size: 14px; }
@@ -252,6 +280,8 @@ h1, h2, h3, p { margin-top: 0; }
 
 @media (max-width: 980px) {
   .transaction-pipeline span { font-size: 7px; }
+  .restore-row { grid-template-columns: 24px minmax(0, 1fr); }
+  .restore-actions { grid-column: 2; justify-content: flex-end; }
 }
 
 @media (max-height: 700px) {

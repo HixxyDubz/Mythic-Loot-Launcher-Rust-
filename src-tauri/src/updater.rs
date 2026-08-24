@@ -11,12 +11,14 @@ use fs2::available_space;
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 use walkdir::WalkDir;
-use zip::{CompressionMethod, DateTime, ZipArchive, ZipWriter, write::SimpleFileOptions};
+use zip::ZipArchive;
+#[cfg(test)]
+use zip::{ZipWriter, write::SimpleFileOptions};
 
 use crate::{
     manifest::{self, FileEntry, Manifest},
     models::GameProfile,
-    safe_path, storage,
+    restore_points, safe_path, storage,
 };
 
 const FREE_SPACE_BUFFER: u64 = 64 * 1024 * 1024;
@@ -84,6 +86,7 @@ struct TransactionPlan {
     profile_id: String,
     kind: TransactionKind,
     version: String,
+    previous_version: String,
     stage_root: PathBuf,
     content_dir: PathBuf,
     install_dir: PathBuf,
@@ -274,6 +277,7 @@ fn prepare_at(
         profile_id: profile.id.clone(),
         kind,
         version: manifest.modpack_version.clone(),
+        previous_version: profile.local_modpack_version.clone(),
         stage_root: stage_root.clone(),
         content_dir,
         install_dir: install_dir.clone(),
@@ -793,121 +797,27 @@ fn affected_paths(plan: &TransactionPlan) -> Vec<String> {
 }
 
 fn create_backup(plan: &TransactionPlan, affected: &[String]) -> Result<Option<PathBuf>, String> {
-    let files = collect_existing_files(&plan.install_dir, affected)?;
-    if files.is_empty() {
-        return Ok(None);
-    }
-    let estimated = files.iter().try_fold(0_u64, |total, (_, path)| {
-        path.metadata()
-            .ok()
-            .and_then(|metadata| total.checked_add(metadata.len()))
-    });
-    ensure_space(&plan.backups_dir, estimated.unwrap_or(u64::MAX))?;
-    fs::create_dir_all(&plan.backups_dir)
-        .map_err(|error| format!("Could not create backup folder: {error}"))?;
-    let backup_path = plan.backups_dir.join(format!(
-        "{}_pre_{}.zip",
-        plan.preview_id,
-        kind_label(plan.kind)
-    ));
-    let output = BufWriter::new(
-        File::create(&backup_path)
-            .map_err(|error| format!("Could not create pre-change backup: {error}"))?,
-    );
-    let mut archive = ZipWriter::new(output);
-    for (relative, source) in &files {
-        let options = SimpleFileOptions::default()
-            .compression_method(CompressionMethod::Deflated)
-            .compression_level(Some(6))
-            .last_modified_time(DateTime::default())
-            .unix_permissions(0o644)
-            .large_file(
-                source.metadata().map(|value| value.len()).unwrap_or(0) > u64::from(u32::MAX),
-            );
-        archive
-            .start_file(relative, options)
-            .map_err(|error| format!("Could not add {relative} to backup: {error}"))?;
-        io::copy(
-            &mut BufReader::new(
-                File::open(source)
-                    .map_err(|error| format!("Could not read {relative} for backup: {error}"))?,
-            ),
-            &mut archive,
-        )
-        .map_err(|error| format!("Could not back up {relative}: {error}"))?;
-    }
-    let mut output = archive
-        .finish()
-        .map_err(|error| format!("Could not finalize backup: {error}"))?;
-    output
-        .flush()
-        .map_err(|error| format!("Could not flush backup: {error}"))?;
-    validate_backup(&backup_path)?;
-    Ok(Some(backup_path))
-}
-
-fn collect_existing_files(
-    install_dir: &Path,
-    affected: &[String],
-) -> Result<Vec<(String, PathBuf)>, String> {
-    let mut collected = HashMap::new();
-    for relative in affected {
-        let target = guarded_join(install_dir, relative)?;
-        if target.is_file() {
-            collected.insert(relative.to_ascii_lowercase(), (relative.clone(), target));
-        } else if target.is_dir() {
-            for item in WalkDir::new(&target)
-                .follow_links(false)
-                .sort_by_file_name()
-            {
-                let item =
-                    item.map_err(|error| format!("Could not inspect backup input: {error}"))?;
-                if item.file_type().is_symlink() {
-                    return Err(format!(
-                        "Symbolic links are not supported in affected live paths: {}",
-                        item.path().display()
-                    ));
-                }
-                if item.file_type().is_file() {
-                    let relative = item
-                        .path()
-                        .strip_prefix(install_dir)
-                        .map_err(|_| "A backup input escaped the modpack folder".to_string())?
-                        .to_string_lossy()
-                        .replace('\\', "/");
-                    let relative = safe_path::normalize_relative(&relative)?;
-                    collected.insert(relative.to_ascii_lowercase(), (relative, item.into_path()));
-                }
-            }
-        } else if target.exists() {
-            return Err(format!("Unsupported affected path type: {relative}"));
+    let files = restore_points::collect_existing_files(&plan.install_dir, affected)?;
+    let mut remove_on_restore = Vec::new();
+    for entry in &plan.inventory {
+        if !guarded_join(&plan.install_dir, &entry.relative)?.exists() {
+            remove_on_restore.push(entry.relative.clone());
         }
     }
-    let mut files: Vec<_> = collected.into_values().collect();
-    files.sort_by(|left, right| left.0.cmp(&right.0));
-    Ok(files)
-}
-
-fn validate_backup(path: &Path) -> Result<(), String> {
-    let file = File::open(path).map_err(|error| format!("Could not reopen backup: {error}"))?;
-    let mut archive =
-        ZipArchive::new(file).map_err(|error| format!("Backup is invalid: {error}"))?;
-    let mut seen = HashSet::new();
-    for index in 0..archive.len() {
-        let mut member = archive
-            .by_index(index)
-            .map_err(|error| format!("Could not inspect backup member: {error}"))?;
-        let normalized = safe_path::validate_archive_member(member.name(), member.is_dir())?;
-        if !seen.insert(normalized.to_ascii_lowercase())
-            || member.encrypted()
-            || member.is_symlink()
-        {
-            return Err(format!("Backup contains an unsafe member: {normalized}"));
-        }
-        io::copy(&mut member, &mut io::sink())
-            .map_err(|error| format!("Backup CRC validation failed for {normalized}: {error}"))?;
+    if !plan.install_dir.join("modpack_version.txt").exists() {
+        remove_on_restore.push("modpack_version.txt".into());
     }
-    Ok(())
+    let backup_id = format!("{}_pre_{}", plan.preview_id, kind_label(plan.kind));
+    restore_points::create_archive(
+        &plan.backups_dir,
+        &backup_id,
+        &plan.profile_id,
+        &format!("pre_{}", kind_label(plan.kind)),
+        &plan.previous_version,
+        &files,
+        &remove_on_restore,
+    )
+    .map(Some)
 }
 
 fn apply_one(
@@ -1035,7 +945,8 @@ fn rollback(
         }
     }
     if let Some(path) = backup_path
-        && let Err(error) = restore_backup(path, &plan.install_dir, &plan.preview_id)
+        && let Err(error) =
+            restore_points::restore_archive_files(path, &plan.install_dir, &plan.preview_id)
     {
         errors.push(error);
     }
@@ -1044,41 +955,6 @@ fn rollback(
     } else {
         Err(errors.join("; "))
     }
-}
-
-fn restore_backup(path: &Path, install_dir: &Path, transaction_id: &str) -> Result<(), String> {
-    validate_backup(path)?;
-    let file =
-        File::open(path).map_err(|error| format!("Could not open rollback backup: {error}"))?;
-    let mut archive = ZipArchive::new(file)
-        .map_err(|error| format!("Could not read rollback backup: {error}"))?;
-    for index in 0..archive.len() {
-        let mut member = archive
-            .by_index(index)
-            .map_err(|error| format!("Could not read rollback member: {error}"))?;
-        if member.is_dir() {
-            continue;
-        }
-        let relative = safe_path::validate_archive_member(member.name(), false)?;
-        let target = guarded_join(install_dir, &relative)?;
-        fs::create_dir_all(target.parent().unwrap_or(install_dir))
-            .map_err(|error| format!("Could not recreate rollback folder: {error}"))?;
-        let staged = path.with_file_name(format!(".rollback-{transaction_id}-{index}"));
-        {
-            let mut output =
-                BufWriter::new(File::create(&staged).map_err(|error| {
-                    format!("Could not stage rollback for {relative}: {error}")
-                })?);
-            io::copy(&mut member, &mut output)
-                .map_err(|error| format!("Could not restore {relative}: {error}"))?;
-            output
-                .flush()
-                .map_err(|error| format!("Could not flush restored {relative}: {error}"))?;
-        }
-        atomic_copy(&staged, &target, transaction_id)?;
-        fs::remove_file(staged).ok();
-    }
-    Ok(())
 }
 
 fn existing_obsolete(manifest: &Manifest, install_dir: &Path) -> Result<Vec<String>, String> {

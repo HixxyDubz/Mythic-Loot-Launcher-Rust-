@@ -37,6 +37,9 @@ describe("Mythic Loot launcher shell", () => {
     fireEvent.click(screen.getByRole("button", { name: /update & repair/i }));
     expect(await screen.findByRole("heading", { name: "Update & Repair" })).toBeInTheDocument();
     expect(screen.getByText("Live files stay untouched during preparation")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Recovery history" })).toBeInTheDocument();
+    expect(screen.getByText("No restore points yet")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /apply verified/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /restore verified point/i })).not.toBeInTheDocument();
   });
 });

@@ -187,3 +187,44 @@ export interface TransactionOutcome {
   message: string;
   error: string;
 }
+
+export interface RestorePointSummary {
+  backupId: string;
+  profileId: string;
+  label: string;
+  createdAt: number;
+  sizeBytes: number;
+  fileCount: number;
+  removesOnRestore: number;
+  localModpackVersion: string;
+  valid: boolean;
+  issues: string[];
+}
+
+export interface RestorePreview {
+  previewId: string;
+  backupId: string;
+  profileId: string;
+  label: string;
+  createdAt: number;
+  localModpackVersion: string;
+  stagedFiles: number;
+  stagedBytes: number;
+  existingFilesToBackup: number;
+  filesToRemove: number;
+  ready: boolean;
+  message: string;
+}
+
+export interface RestoreOutcome {
+  profileId: string;
+  backupId: string;
+  success: boolean;
+  restored: string[];
+  removed: string[];
+  recoveryBackupPath: string;
+  rolledBack: boolean;
+  rollbackError: string;
+  message: string;
+  error: string;
+}

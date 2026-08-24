@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  ArchiveRestore,
   ArrowLeft,
   CheckCircle2,
   Download,
@@ -8,13 +9,24 @@ import {
   RotateCcw,
   ShieldAlert,
   ShieldCheck,
+  Trash2,
   Wrench,
 } from "lucide-react";
-import { applyModpackTransaction, prepareModpackTransaction } from "../api";
+import {
+  applyModpackTransaction,
+  applyRestorePoint,
+  deleteRestorePoint,
+  listRestorePoints,
+  prepareModpackTransaction,
+  prepareRestorePoint,
+} from "../api";
 import type {
   GameProfile,
   ManifestSummary,
   ProfileHealth,
+  RestoreOutcome,
+  RestorePointSummary,
+  RestorePreview,
   TransactionKind,
   TransactionOutcome,
   TransactionPreview,
@@ -42,6 +54,28 @@ export function UpdatePanel({
   const [preview, setPreview] = useState<TransactionPreview | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [outcome, setOutcome] = useState<TransactionOutcome | null>(null);
+  const [restorePoints, setRestorePoints] = useState<RestorePointSummary[]>([]);
+  const [restorePreview, setRestorePreview] = useState<RestorePreview | null>(null);
+  const [restoreOutcome, setRestoreOutcome] = useState<RestoreOutcome | null>(null);
+  const [restoreConfirmed, setRestoreConfirmed] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [deleteConfirmed, setDeleteConfirmed] = useState(false);
+  const [restoreBusy, setRestoreBusy] = useState(false);
+
+  useEffect(() => {
+    setRestorePreview(null);
+    setRestoreOutcome(null);
+    setDeleteTarget(null);
+    void loadRestorePoints();
+  }, [profile.id]);
+
+  async function loadRestorePoints() {
+    try {
+      setRestorePoints(await listRestorePoints(profile.id));
+    } catch (error) {
+      onNotice(errorMessage(error));
+    }
+  }
 
   async function prepare(kind: TransactionKind) {
     setBusy(true);
@@ -70,12 +104,69 @@ export function UpdatePanel({
       setOutcome(result);
       setConfirmed(false);
       onNotice(result.message);
-      if (result.success) await onCompleted();
+      if (result.success) {
+        await onCompleted();
+        await loadRestorePoints();
+      }
     } catch (error) {
       onNotice(errorMessage(error));
     } finally {
       setBusy(false);
       setBusyKind(null);
+    }
+  }
+
+  async function reviewRestore(point: RestorePointSummary) {
+    setRestoreBusy(true);
+    setRestorePreview(null);
+    setRestoreOutcome(null);
+    setRestoreConfirmed(false);
+    setDeleteTarget(null);
+    try {
+      const result = await prepareRestorePoint(profile.id, point.backupId);
+      setRestorePreview(result);
+      onNotice(result.message);
+    } catch (error) {
+      onNotice(errorMessage(error));
+    } finally {
+      setRestoreBusy(false);
+    }
+  }
+
+  async function restore() {
+    if (!restorePreview) return;
+    setRestoreBusy(true);
+    try {
+      const result = await applyRestorePoint(restorePreview.previewId, restoreConfirmed);
+      setRestoreOutcome(result);
+      setRestoreConfirmed(false);
+      onNotice(result.message);
+      if (result.success) {
+        setRestorePreview(null);
+        await onCompleted();
+        await loadRestorePoints();
+      }
+    } catch (error) {
+      onNotice(errorMessage(error));
+    } finally {
+      setRestoreBusy(false);
+    }
+  }
+
+  async function removeRestorePoint() {
+    if (!deleteTarget) return;
+    setRestoreBusy(true);
+    try {
+      const message = await deleteRestorePoint(profile.id, deleteTarget, deleteConfirmed);
+      onNotice(message);
+      setDeleteTarget(null);
+      setDeleteConfirmed(false);
+      setRestorePreview((current) => current?.backupId === deleteTarget ? null : current);
+      await loadRestorePoints();
+    } catch (error) {
+      onNotice(errorMessage(error));
+    } finally {
+      setRestoreBusy(false);
     }
   }
 
@@ -160,6 +251,76 @@ export function UpdatePanel({
             </div>
           </section>
         )}
+
+        <section className="settings-section panel-card restore-history">
+          <div className="section-title">
+            <ArchiveRestore />
+            <div><h2>Recovery history</h2><p>Transactional backups are kept in launcher-owned storage. The newest five points are retained automatically.</p></div>
+            <button className="detect-button" onClick={() => void loadRestorePoints()} disabled={restoreBusy}><RefreshCw size={15} /> Refresh</button>
+          </div>
+          {restorePoints.length === 0 ? (
+            <div className="restore-empty"><HardDrive /><span><strong>No restore points yet</strong><small>A verified point is created immediately before the first live write of an update, repair, or restore.</small></span></div>
+          ) : (
+            <div className="restore-list">
+              {restorePoints.map((point) => (
+                <article className={`restore-row ${point.valid ? '' : 'invalid'}`} key={point.backupId}>
+                  <ArchiveRestore />
+                  <div className="restore-copy">
+                    <strong>{backupLabel(point.label)}</strong>
+                    <small>{formatDate(point.createdAt)} · {point.fileCount.toLocaleString()} files · {formatBytes(point.sizeBytes)}{point.localModpackVersion ? ` · v${point.localModpackVersion}` : ''}</small>
+                    {point.removesOnRestore > 0 && <small>{point.removesOnRestore.toLocaleString()} update-created paths will be removed</small>}
+                    {!point.valid && <small className="outcome-error">{point.issues[0] || 'This backup cannot be restored safely.'}</small>}
+                  </div>
+                  <div className="restore-actions">
+                    <button className="secondary-action" onClick={() => void reviewRestore(point)} disabled={!point.valid || restoreBusy}>Review restore</button>
+                    <button className="icon-danger" aria-label={`Delete ${backupLabel(point.label)}`} onClick={() => { setDeleteTarget(point.backupId); setDeleteConfirmed(false); }} disabled={restoreBusy}><Trash2 size={15} /></button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {restorePreview && (
+          <section className="settings-section panel-card transaction-preview ready restore-preview">
+            <div className="section-title"><ShieldCheck /><div><h2>Restore candidate verified</h2><p>{restorePreview.message}</p></div></div>
+            <dl className="pack-facts preview-facts">
+              <div><dt>Restore point</dt><dd>{backupLabel(restorePreview.label)}</dd></div>
+              <div><dt>Created</dt><dd>{formatDate(restorePreview.createdAt)}</dd></div>
+              <div><dt>Restored version</dt><dd>{restorePreview.localModpackVersion || 'Unrecorded'}</dd></div>
+              <div><dt>Staged payload</dt><dd>{restorePreview.stagedFiles.toLocaleString()} files · {formatBytes(restorePreview.stagedBytes)}</dd></div>
+              <div><dt>Current files protected</dt><dd>{restorePreview.existingFilesToBackup.toLocaleString()}</dd></div>
+              <div><dt>Update-created paths removed</dt><dd>{restorePreview.filesToRemove.toLocaleString()}</dd></div>
+            </dl>
+            <div className="safety-note transaction-backup-note"><HardDrive size={15} /> A second recovery backup of the current installation is created before this restore changes any live path.</div>
+            <label className="confirmation-row"><input type="checkbox" checked={restoreConfirmed} onChange={(event) => setRestoreConfirmed(event.target.checked)} /><span>I confirm that the launcher may create a recovery backup and transactionally restore this reviewed point.</span></label>
+            <button className="primary-action danger-action" onClick={() => void restore()} disabled={!restoreConfirmed || restoreBusy}>
+              {restoreBusy ? <RefreshCw className="spin" size={17} /> : <ArchiveRestore size={17} />} Restore verified point
+            </button>
+          </section>
+        )}
+
+        {deleteTarget && (
+          <section className="settings-section panel-card delete-restore-confirmation">
+            <ShieldAlert />
+            <div><h2>Delete this restore point?</h2><p>This removes only the selected launcher-owned ZIP. It cannot be undone and does not change the live modpack.</p></div>
+            <label className="confirmation-row"><input type="checkbox" checked={deleteConfirmed} onChange={(event) => setDeleteConfirmed(event.target.checked)} /><span>I understand this recovery file will be permanently deleted.</span></label>
+            <div className="delete-actions"><button className="secondary-action" onClick={() => { setDeleteTarget(null); setDeleteConfirmed(false); }}>Cancel</button><button className="primary-action danger-action" onClick={() => void removeRestorePoint()} disabled={!deleteConfirmed || restoreBusy}><Trash2 size={16} /> Delete restore point</button></div>
+          </section>
+        )}
+
+        {restoreOutcome && (
+          <section className={`settings-section panel-card transaction-outcome ${restoreOutcome.success ? 'success' : restoreOutcome.rolledBack ? 'rolled-back' : 'failed'}`}>
+            {restoreOutcome.success ? <CheckCircle2 /> : restoreOutcome.rolledBack ? <RotateCcw /> : <ShieldAlert />}
+            <div>
+              <h2>{restoreOutcome.success ? 'Restore complete' : restoreOutcome.rolledBack ? 'Restore rolled back safely' : 'Restore needs attention'}</h2>
+              <p>{restoreOutcome.message}</p>
+              <small>{restoreOutcome.restored.length} restored · {restoreOutcome.removed.length} removed{restoreOutcome.recoveryBackupPath ? ` · Recovery backup: ${restoreOutcome.recoveryBackupPath}` : ''}</small>
+              {restoreOutcome.error && <small className="outcome-error">Cause: {restoreOutcome.error}</small>}
+              {restoreOutcome.rollbackError && <small className="outcome-error">Rollback: {restoreOutcome.rollbackError}</small>}
+            </div>
+          </section>
+        )}
       </div>
     </main>
   );
@@ -192,6 +353,18 @@ function formatBytes(bytes: number): string {
     index += 1;
   }
   return `${value.toFixed(value >= 100 ? 0 : 1)} ${units[index]}`;
+}
+
+function formatDate(timestamp: number): string {
+  if (!timestamp) return 'Unknown date';
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(timestamp * 1000));
+}
+
+function backupLabel(label: string): string {
+  return label.replace(/_/g, ' ').replace(/\b\w/g, (value: string) => value.toUpperCase());
 }
 
 function errorMessage(error: unknown): string {

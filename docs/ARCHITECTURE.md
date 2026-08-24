@@ -10,6 +10,7 @@ Rust application core
   -> game/modpack detection and local readiness
   -> validated process launch
   -> manifest verification and transactional update/repair services
+  -> metadata-backed restore-point recovery
   -> local-first publishing services
 Windows, filesystem, game launchers and GitHub CLI
 ```
@@ -27,6 +28,7 @@ React does not receive arbitrary shell or filesystem access. Native operations a
 - `publisher.rs`: shell-free GitHub CLI preflight and fail-closed repository creation after explicit confirmation.
 - `packager.rs`: source-folder exclusions/privacy audit, deterministic ZIP and manifest generation, native release-plan caching, asset re-verification and explicitly confirmed immutable GitHub Release publication.
 - `updater.rs`: trusted local/HTTPS and multipart package acquisition, archive validation, isolated changed-file staging, native preview caching, disk-space checks, pre-change ZIP backup, confirmed apply, post-verification and journaled rollback.
+- `restore_points.rs`: hashed backup metadata, five-point retention, safe history listing, isolated restore staging, cached previews, explicit restore/delete confirmations, recovery-of-the-recovery backup, post-restore verification and rollback.
 - `launch.rs`: validated native process start and Windows-aware argument parsing; it never generates server connection arguments.
 - `lib.rs`: narrow command boundary and main-window startup assertion.
 
@@ -45,6 +47,8 @@ The native store resolves through Tauri's application data directory. `MYTHIC_LO
 ## Transaction boundary
 
 Update preparation resolves the trusted manifest, downloads or copies the package into launcher-owned storage, rejects unsafe ZIP members, extracts only required changed files, and verifies the staged SHA-256 inventory before returning a preview. Apply accepts only that cached preview identifier plus explicit confirmation. It revalidates staged files, creates a backup of affected live paths, journals new paths, applies replacements/removals, verifies the complete live manifest, and restores overwritten, created, obsolete, and version-marker state if any apply or finalization step fails.
+
+Every new backup contains a schema-versioned inventory of relative paths, sizes and SHA-256 values plus the update-created paths that must be removed to restore the earlier state. Recovery listing and deletion resolve only within the selected profile's launcher-owned backup folder. Restore preparation rejects archives without trustworthy metadata, extracts and verifies into isolated storage, and returns a cached preview. Confirmed restore creates a second backup of the current live state before mutation, verifies the restored inventory, and rolls itself back if mutation or final configuration persistence fails.
 
 GitHub publishing is a separate Developer workflow: local preparation scans privacy and produces reviewed artifacts without authentication; repository creation and release publication use authenticated `gh` state and separate explicit confirmations. The native release command accepts only a cached preview identifier, not arbitrary asset paths, and re-hashes the cached assets at action time. Player builds will only consume reviewed release metadata and must not contain publishing controls.
 

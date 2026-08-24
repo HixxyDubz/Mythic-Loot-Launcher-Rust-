@@ -5,6 +5,7 @@ mod models;
 mod packager;
 mod publisher;
 mod readiness;
+mod restore_points;
 mod safe_path;
 mod storage;
 mod updater;
@@ -13,6 +14,7 @@ use manifest::FileVerification;
 use models::{BootstrapPayload, DetectedInstall, GameProfile, LaunchOutcome, ReadinessStatus};
 use packager::{PackagePreview, PackageRequest, ReleasePublication};
 use publisher::{PublisherStatus, RepositoryCreation, RepositoryRequest};
+use restore_points::{RestoreOutcome, RestorePointSummary, RestorePreview};
 use tauri::{AppHandle, Manager};
 use updater::{TransactionOutcome, TransactionPreview, TransactionRequest};
 
@@ -145,6 +147,50 @@ async fn apply_modpack_transaction(
 }
 
 #[tauri::command]
+fn list_restore_points(
+    app: AppHandle,
+    profile_id: String,
+) -> Result<Vec<RestorePointSummary>, String> {
+    restore_points::list(&app, &profile_id)
+}
+
+#[tauri::command]
+async fn prepare_restore_point(
+    app: AppHandle,
+    profile_id: String,
+    backup_id: String,
+) -> Result<RestorePreview, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        restore_points::prepare(&app, &profile_id, &backup_id)
+    })
+    .await
+    .map_err(|error| format!("Restore staging task failed: {error}"))?
+}
+
+#[tauri::command]
+async fn apply_restore_point(
+    app: AppHandle,
+    preview_id: String,
+    confirmed: bool,
+) -> Result<RestoreOutcome, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        restore_points::apply(&app, &preview_id, confirmed)
+    })
+    .await
+    .map_err(|error| format!("Restore task failed: {error}"))?
+}
+
+#[tauri::command]
+fn delete_restore_point(
+    app: AppHandle,
+    profile_id: String,
+    backup_id: String,
+    confirmed: bool,
+) -> Result<String, String> {
+    restore_points::delete(&app, &profile_id, &backup_id, confirmed)
+}
+
+#[tauri::command]
 async fn verify_profile_files(
     app: AppHandle,
     profile_id: String,
@@ -212,6 +258,10 @@ pub fn run() {
             publish_modpack_release,
             prepare_modpack_transaction,
             apply_modpack_transaction,
+            list_restore_points,
+            prepare_restore_point,
+            apply_restore_point,
+            delete_restore_point,
             verify_profile_files,
             launch_profile
         ])

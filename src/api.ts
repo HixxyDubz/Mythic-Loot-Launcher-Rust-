@@ -11,6 +11,9 @@ import type {
   ReleasePublication,
   RepositoryCreation,
   RepositoryRequest,
+  RestoreOutcome,
+  RestorePointSummary,
+  RestorePreview,
   TransactionOutcome,
   TransactionPreview,
   TransactionRequest,
@@ -110,4 +113,41 @@ export async function applyModpackTransaction(
     throw new Error("Modpack updates and repairs are only available in the native Tauri app.");
   }
   return invoke<TransactionOutcome>("apply_modpack_transaction", { previewId, confirmed });
+}
+
+export async function listRestorePoints(profileId: string): Promise<RestorePointSummary[]> {
+  return runningInTauri
+    ? invoke<RestorePointSummary[]>("list_restore_points", { profileId })
+    : [];
+}
+
+export async function prepareRestorePoint(
+  profileId: string,
+  backupId: string,
+): Promise<RestorePreview> {
+  if (!runningInTauri) {
+    throw new Error("Restore staging is only available in the native Tauri app.");
+  }
+  return invoke<RestorePreview>("prepare_restore_point", { profileId, backupId });
+}
+
+export async function applyRestorePoint(
+  previewId: string,
+  confirmed: boolean,
+): Promise<RestoreOutcome> {
+  if (!runningInTauri) {
+    throw new Error("Restore points are only available in the native Tauri app.");
+  }
+  return invoke<RestoreOutcome>("apply_restore_point", { previewId, confirmed });
+}
+
+export async function deleteRestorePoint(
+  profileId: string,
+  backupId: string,
+  confirmed: boolean,
+): Promise<string> {
+  if (!runningInTauri) {
+    throw new Error("Restore-point deletion is only available in the native Tauri app.");
+  }
+  return invoke<string>("delete_restore_point", { profileId, backupId, confirmed });
 }
