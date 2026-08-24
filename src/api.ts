@@ -5,7 +5,10 @@ import type {
   FileVerification,
   GameProfile,
   LaunchOutcome,
+  PackagePreview,
+  PackageRequest,
   PublisherStatus,
+  ReleasePublication,
   RepositoryCreation,
   RepositoryRequest,
 } from "./types";
@@ -68,4 +71,21 @@ export async function createGithubRepository(request: RepositoryRequest): Promis
     throw new Error("Repository creation is only available in the native Developer app.");
   }
   return invoke<RepositoryCreation>("create_github_repository", { request });
+}
+
+export async function prepareModpackRelease(request: PackageRequest): Promise<PackagePreview> {
+  if (!runningInTauri) {
+    throw new Error("Local release packaging is only available in the native Developer app.");
+  }
+  return invoke<PackagePreview>("prepare_modpack_release", { request });
+}
+
+export async function publishModpackRelease(
+  previewId: string,
+  confirmed: boolean,
+): Promise<ReleasePublication> {
+  if (!runningInTauri) {
+    throw new Error("GitHub release publishing is only available in the native Developer app.");
+  }
+  return invoke<ReleasePublication>("publish_modpack_release", { previewId, confirmed });
 }

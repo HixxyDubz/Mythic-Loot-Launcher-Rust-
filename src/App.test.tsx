@@ -17,6 +17,8 @@ describe("Mythic Loot launcher shell", () => {
     fireEvent.click(await screen.findByRole("button", { name: /publisher/i }));
     expect(await screen.findByRole("heading", { name: "GitHub Publisher" })).toBeInTheDocument();
     expect(screen.getByText("Preflight required")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /prepare release locally/i })).toBeDisabled();
     expect(screen.queryByRole("button", { name: /^create repository$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /publish github release/i })).not.toBeInTheDocument();
   });
 });

@@ -2,6 +2,7 @@ mod detection;
 mod launch;
 mod manifest;
 mod models;
+mod packager;
 mod publisher;
 mod readiness;
 mod safe_path;
@@ -9,6 +10,7 @@ mod storage;
 
 use manifest::FileVerification;
 use models::{BootstrapPayload, DetectedInstall, GameProfile, LaunchOutcome, ReadinessStatus};
+use packager::{PackagePreview, PackageRequest, ReleasePublication};
 use publisher::{PublisherStatus, RepositoryCreation, RepositoryRequest};
 use tauri::{AppHandle, Manager};
 
@@ -100,6 +102,26 @@ async fn create_github_repository(
 }
 
 #[tauri::command]
+async fn prepare_modpack_release(
+    app: AppHandle,
+    request: PackageRequest,
+) -> Result<PackagePreview, String> {
+    tauri::async_runtime::spawn_blocking(move || packager::prepare(&app, &request))
+        .await
+        .map_err(|error| format!("Modpack packaging task failed: {error}"))?
+}
+
+#[tauri::command]
+async fn publish_modpack_release(
+    preview_id: String,
+    confirmed: bool,
+) -> Result<ReleasePublication, String> {
+    tauri::async_runtime::spawn_blocking(move || packager::publish(&preview_id, confirmed))
+        .await
+        .map_err(|error| format!("GitHub release task failed: {error}"))?
+}
+
+#[tauri::command]
 async fn verify_profile_files(
     app: AppHandle,
     profile_id: String,
@@ -163,6 +185,8 @@ pub fn run() {
             detect_installations,
             github_publisher_status,
             create_github_repository,
+            prepare_modpack_release,
+            publish_modpack_release,
             verify_profile_files,
             launch_profile
         ])

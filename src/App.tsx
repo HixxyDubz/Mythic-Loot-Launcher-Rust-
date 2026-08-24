@@ -163,7 +163,7 @@ function App() {
           <div className="content-region">
             {page === "publisher" ? (
               <PublisherPanel
-                modpackName={selectedProfile.displayName}
+                profile={selectedProfile}
                 onBack={() => setPage("dashboard")}
                 onNotice={setNotice}
               />

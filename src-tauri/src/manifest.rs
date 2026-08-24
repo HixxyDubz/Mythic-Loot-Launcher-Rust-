@@ -375,7 +375,7 @@ pub fn verify_required_files(
     Ok(result)
 }
 
-fn sha256(path: &Path) -> Result<String, String> {
+pub(crate) fn sha256(path: &Path) -> Result<String, String> {
     let file =
         File::open(path).map_err(|error| format!("failed to open {}: {error}", path.display()))?;
     let mut reader = BufReader::new(file);

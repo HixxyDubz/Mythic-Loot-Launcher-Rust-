@@ -112,3 +112,41 @@ export interface RepositoryCreation {
   url: string;
   message: string;
 }
+
+export interface PackageRequest {
+  profileId: string;
+  sourceDir: string;
+  version: string;
+  releaseDate: string;
+  repository: string;
+  releaseNotes: string;
+}
+
+export interface PackagePreview {
+  previewId: string;
+  profileId: string;
+  version: string;
+  tag: string;
+  repository: string;
+  sourceDir: string;
+  outputDir: string;
+  packagePath: string;
+  manifestPath: string;
+  fileCount: number;
+  excludedCount: number;
+  totalBytes: number;
+  packageBytes: number;
+  packageSha256: string;
+  added: number;
+  changed: number;
+  removed: number;
+  issues: string[];
+  ready: boolean;
+}
+
+export interface ReleasePublication {
+  repository: string;
+  tag: string;
+  url: string;
+  message: string;
+}

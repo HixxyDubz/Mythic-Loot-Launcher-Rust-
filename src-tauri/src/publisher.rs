@@ -159,14 +159,14 @@ pub fn validate_repository_name(value: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn run_gh<'a>(arguments: impl IntoIterator<Item = &'a str>) -> Result<Output, String> {
+pub(crate) fn run_gh<'a>(arguments: impl IntoIterator<Item = &'a str>) -> Result<Output, String> {
     Command::new("gh")
         .args(arguments)
         .output()
         .map_err(|error| format!("Could not run GitHub CLI: {error}"))
 }
 
-fn output_message(output: &Output, fallback: &str) -> String {
+pub(crate) fn output_message(output: &Output, fallback: &str) -> String {
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if !stderr.is_empty() {

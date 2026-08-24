@@ -23,22 +23,22 @@ The Python launcher remains the behavior reference. This file records the new Ru
 | Server handling | Explicitly out of scope | The earlier protocol experiment was removed following owner clarification. There are no server commands, fields, readiness gates, dashboard controls or generated join arguments. |
 | News/rules/changelog/activity/storage/support | Not implemented | No parity claim. |
 | GitHub repository creation | Foundation / external acceptance pending | Developer UI and Rust commands perform read-only `gh` preflight, validate strict `owner/name` input, default to private, preview the external mutation, and fail closed without explicit confirmation. No repository was created during local verification and no token is stored. |
-| GitHub release packaging/upload | Not implemented | Requires source-folder privacy scanning, deterministic package/manifest generation and a separate preview/confirmation gate before `gh release create`. |
+| GitHub release packaging/upload | Verified local foundation / external acceptance pending | Rust walks a selected source without following links, excludes runtime/private state, scans supported text through 32 MiB, rejects personal/credential-shaped content, streams SHA-256, produces sorted fixed-metadata ZIPs and validated v1 manifests, previews inventory/diff/hash/output, caches native asset paths, and re-hashes them before an explicitly confirmed immutable `gh release create`. Tests never call GitHub; authenticated real-repository publication remains unproven. Single ZIP assets at or above 2 GiB fail closed until multipart publishing is ported. |
 | Self-update | Not implemented | New repository feed and production replacement acceptance are required. |
 | Player/Developer packaging and privacy audit | Not implemented | Must be separate artifacts, not a runtime toggle alone. |
 
 ## Verification snapshot
 
-- `cargo test --manifest-path src-tauri/Cargo.toml`: 19 passed, including schema-1 cleanup, bundled manifests, adversarial paths, streaming hashes and fail-closed repository creation.
+- `cargo test --manifest-path src-tauri/Cargo.toml`: 23 passed, including schema-1 cleanup, bundled manifests, adversarial paths, streaming hashes, deterministic package reproduction, exclusions, 4 MiB privacy scanning, credential rejection, and fail-closed repository/release creation.
 - `npm run test`: 2 passed.
 - `npm run build`: TypeScript and Vite production build passed; 1,829 modules transformed.
 - `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`: passed.
 - `npm run tauri build -- --no-bundle`: fresh native release built successfully.
 - `npm run tauri build -- --no-bundle`: fresh server-free native release built successfully.
-- Release executable: 11,624,448 bytes; SHA-256 `53F8A4FA7E5CAB1BC53A25C243B4EB44EA73A15DF8FE8E485D0EEA71761490F5`.
-- Isolated-data native smoke: responsive at the four-second sample, 28.2 MB working set, schema 2, two profiles, and no `serverName`, `serverIp` or `serverPort` keys; temporary data was removed afterward.
-- Browser visual check: corrected dashboard and Publisher workspace passed at 1180x760 and 940x640 without horizontal overflow or console errors; content-only vertical scrolling remained available.
+- Release executable: 14,027,776 bytes; SHA-256 `02FBFB4DDD8EA2D26076824C76EBFADB5F5D6FEFC4B9725339DE375BD31E805A`.
+- Isolated-data native smoke: responsive at the four-second sample, 27.5 MB working set, schema 2, two profiles, and no `serverName`, `serverIp` or `serverPort` keys; temporary data was removed afterward.
+- Browser visual check: the expanded Publisher workspace passed at 1180x760 and 940x640 without horizontal overflow or console errors; content-only vertical scrolling remained available.
 
 ## External acceptance boundary
 
-Server acceptance is not a launcher gate because servers are managed elsewhere. Remote manifest retrieval, transactional update/repair, authenticated GitHub repository creation/release publication, and friend-machine modpack acceptance are not part of this checkpoint.
+Server acceptance is not a launcher gate because servers are managed elsewhere. Remote manifest retrieval, transactional update/repair, authenticated GitHub repository creation/release publication, multipart publication, separate Player/Developer artifacts, and friend-machine modpack acceptance are not part of this checkpoint.

@@ -1,23 +1,58 @@
 import { useState } from "react";
-import { ArrowLeft, CheckCircle2, CloudUpload, Eye, LockKeyhole, RefreshCw, ShieldAlert } from "lucide-react";
-import { createGithubRepository, githubPublisherStatus } from "../api";
-import type { PublisherStatus, RepositoryCreation, RepositoryRequest } from "../types";
+import {
+  Archive,
+  ArrowLeft,
+  CheckCircle2,
+  CloudUpload,
+  Eye,
+  FileCheck2,
+  LockKeyhole,
+  RefreshCw,
+  ShieldAlert,
+} from "lucide-react";
+import {
+  createGithubRepository,
+  githubPublisherStatus,
+  prepareModpackRelease,
+  publishModpackRelease,
+} from "../api";
+import type {
+  GameProfile,
+  PackagePreview,
+  PublisherStatus,
+  ReleasePublication,
+  RepositoryCreation,
+  RepositoryRequest,
+} from "../types";
 
 interface PublisherPanelProps {
-  modpackName: string;
+  profile: GameProfile;
   onBack: () => void;
   onNotice: (message: string) => void;
 }
 
-export function PublisherPanel({ modpackName, onBack, onNotice }: PublisherPanelProps) {
+export function PublisherPanel({ profile, onBack, onNotice }: PublisherPanelProps) {
   const [status, setStatus] = useState<PublisherStatus | null>(null);
-  const [repository, setRepository] = useState("");
-  const [description, setDescription] = useState(`${modpackName} release repository`);
+  const [repository, setRepository] = useState(guessRepository(profile.manifestUrl));
+  const [description, setDescription] = useState(`${profile.displayName} release repository`);
   const [visibility, setVisibility] = useState<"private" | "public">("private");
-  const [previewed, setPreviewed] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
+  const [repositoryPreviewed, setRepositoryPreviewed] = useState(false);
+  const [repositoryConfirmed, setRepositoryConfirmed] = useState(false);
+  const [sourceDir, setSourceDir] = useState(profile.installDir);
+  const [version, setVersion] = useState(profile.requiredModpackVersion);
+  const [releaseDate, setReleaseDate] = useState(new Date().toISOString().slice(0, 10));
+  const [releaseNotes, setReleaseNotes] = useState(`Release ${profile.requiredModpackVersion}`);
+  const [releasePreview, setReleasePreview] = useState<PackagePreview | null>(null);
+  const [releaseConfirmed, setReleaseConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [creation, setCreation] = useState<RepositoryCreation | null>(null);
+  const [publication, setPublication] = useState<ReleasePublication | null>(null);
+
+  function invalidateRelease() {
+    setReleasePreview(null);
+    setReleaseConfirmed(false);
+    setPublication(null);
+  }
 
   async function checkGithub() {
     setBusy(true);
@@ -32,19 +67,24 @@ export function PublisherPanel({ modpackName, onBack, onNotice }: PublisherPanel
     }
   }
 
-  function preview() {
-    setConfirmed(false);
+  function previewRepository() {
+    setRepositoryConfirmed(false);
     setCreation(null);
-    setPreviewed(true);
+    setRepositoryPreviewed(true);
   }
 
   async function createRepository() {
-    const request: RepositoryRequest = { repository, description, visibility, confirmed };
+    const request: RepositoryRequest = {
+      repository,
+      description,
+      visibility,
+      confirmed: repositoryConfirmed,
+    };
     setBusy(true);
     try {
       const result = await createGithubRepository(request);
       setCreation(result);
-      setConfirmed(false);
+      setRepositoryConfirmed(false);
       onNotice(result.message);
     } catch (error) {
       onNotice(errorMessage(error));
@@ -53,7 +93,52 @@ export function PublisherPanel({ modpackName, onBack, onNotice }: PublisherPanel
     }
   }
 
-  const canPreview = Boolean(status?.authenticated && repository.includes("/") && !busy);
+  async function prepareRelease() {
+    setBusy(true);
+    setReleaseConfirmed(false);
+    setPublication(null);
+    try {
+      const result = await prepareModpackRelease({
+        profileId: profile.id,
+        sourceDir,
+        version,
+        releaseDate,
+        repository,
+        releaseNotes,
+      });
+      setReleasePreview(result);
+      onNotice(
+        result.ready
+          ? `Local release preview ready: ${result.fileCount.toLocaleString()} files scanned and packaged.`
+          : `Release preparation stopped with ${result.issues.length} safety issue${result.issues.length === 1 ? "" : "s"}.`,
+      );
+    } catch (error) {
+      setReleasePreview(null);
+      onNotice(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function publishRelease() {
+    if (!releasePreview) return;
+    setBusy(true);
+    try {
+      const result = await publishModpackRelease(releasePreview.previewId, releaseConfirmed);
+      setPublication(result);
+      setReleaseConfirmed(false);
+      onNotice(result.message);
+    } catch (error) {
+      onNotice(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const canPreviewRepository = Boolean(status?.authenticated && repository.includes("/") && !busy);
+  const canPrepareRelease = Boolean(
+    repository.includes("/") && sourceDir.trim() && version.trim() && releaseDate.trim() && !busy,
+  );
 
   return (
     <main className="settings-page publisher-page">
@@ -70,21 +155,23 @@ export function PublisherPanel({ modpackName, onBack, onNotice }: PublisherPanel
           <div className="section-title"><LockKeyhole /><div><h2>Authenticated GitHub CLI</h2><p>No access token is stored in the launcher or exposed to React.</p></div></div>
           <div className={`publisher-status ${status?.authenticated ? "good" : "pending"}`}>
             {status?.authenticated ? <CheckCircle2 /> : <ShieldAlert />}
-            <span><strong>{status?.authenticated ? `Ready as ${status.account || "authenticated user"}` : "Preflight required"}</strong><small>{status?.message || "Check GitHub before preparing a repository mutation."}</small></span>
+            <span><strong>{status?.authenticated ? `Ready as ${status.account || "authenticated user"}` : "Preflight required"}</strong><small>{status?.message || "Local packaging works without authentication. Check GitHub before creating a repository or publishing a release."}</small></span>
           </div>
         </section>
 
         <section className="settings-section panel-card">
-          <div className="section-title"><CloudUpload /><div><h2>Repository draft</h2><p>This creates an empty repository only. Packaging and release upload are a separate reviewed step.</p></div></div>
+          <div className="section-title"><CloudUpload /><div><h2>Repository</h2><p>Select an existing owner/name repository, or review and create an empty one.</p></div></div>
           <div className="form-stack">
-            <label className="field"><span>Repository (owner/name)</span><input value={repository} placeholder="HixxyDubz/Mythic-Loot-Modpack" onChange={(event) => { setRepository(event.target.value); setPreviewed(false); }} /></label>
-            <label className="field"><span>Description</span><input value={description} maxLength={350} onChange={(event) => { setDescription(event.target.value); setPreviewed(false); }} /></label>
-            <label className="field"><span>Visibility</span><select value={visibility} onChange={(event) => { setVisibility(event.target.value as "private" | "public"); setPreviewed(false); }}><option value="private">Private (recommended)</option><option value="public">Public</option></select></label>
+            <label className="field"><span>Repository (owner/name)</span><input value={repository} placeholder="HixxyDubz/Mythic-Loot-Modpack" onChange={(event) => { setRepository(event.target.value); setRepositoryPreviewed(false); invalidateRelease(); }} /></label>
+            <div className="form-grid">
+              <label className="field"><span>Description</span><input value={description} maxLength={350} onChange={(event) => { setDescription(event.target.value); setRepositoryPreviewed(false); }} /></label>
+              <label className="field"><span>New repository visibility</span><select value={visibility} onChange={(event) => { setVisibility(event.target.value as "private" | "public"); setRepositoryPreviewed(false); }}><option value="private">Private (recommended)</option><option value="public">Public</option></select></label>
+            </div>
           </div>
-          <button className="primary-action publisher-preview" onClick={preview} disabled={!canPreview}><Eye size={17} /> Preview repository creation</button>
+          <button className="secondary-action publisher-preview" onClick={previewRepository} disabled={!canPreviewRepository}><Eye size={17} /> Preview empty repository creation</button>
         </section>
 
-        {previewed && (
+        {repositoryPreviewed && (
           <section className="settings-section panel-card mutation-preview">
             <div className="section-title"><Eye /><div><h2>External change preview</h2><p>Nothing has been created yet.</p></div></div>
             <dl className="pack-facts">
@@ -93,17 +180,74 @@ export function PublisherPanel({ modpackName, onBack, onNotice }: PublisherPanel
               <div><dt>Initial files</dt><dd>None</dd></div>
               <div><dt>Action</dt><dd>Create repository on GitHub</dd></div>
             </dl>
-            <label className="confirmation-row"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span>I confirm that the launcher may create this GitHub repository.</span></label>
-            <button className="primary-action danger-action" onClick={() => void createRepository()} disabled={!confirmed || busy}>
+            <label className="confirmation-row"><input type="checkbox" checked={repositoryConfirmed} onChange={(event) => setRepositoryConfirmed(event.target.checked)} /><span>I confirm that the launcher may create this empty GitHub repository.</span></label>
+            <button className="primary-action danger-action" onClick={() => void createRepository()} disabled={!repositoryConfirmed || busy}>
               {busy ? <RefreshCw className="spin" size={17} /> : <CloudUpload size={17} />} Create repository
             </button>
           </section>
         )}
 
         {creation && <section className="settings-section panel-card creation-result"><CheckCircle2 /><div><h2>{creation.repository} created</h2><p>{creation.url || creation.message}</p></div></section>}
+
+        <section className="settings-section panel-card release-builder">
+          <div className="section-title"><Archive /><div><h2>Local release preparation</h2><p>Scan privacy, inventory and hash files, then generate a deterministic ZIP and trusted manifest. This step does not contact GitHub.</p></div></div>
+          <div className="form-grid">
+            <label className="field field-wide"><span>Modpack source folder</span><input value={sourceDir} placeholder="C:\Modpacks\Mythic Loot" onChange={(event) => { setSourceDir(event.target.value); invalidateRelease(); }} /></label>
+            <label className="field"><span>Version</span><input value={version} placeholder="1.0.0" onChange={(event) => { setVersion(event.target.value); invalidateRelease(); }} /></label>
+            <label className="field"><span>Release date</span><input type="date" value={releaseDate} onChange={(event) => { setReleaseDate(event.target.value); invalidateRelease(); }} /></label>
+            <label className="field field-wide"><span>Release notes</span><input value={releaseNotes} maxLength={20000} onChange={(event) => { setReleaseNotes(event.target.value); invalidateRelease(); }} /></label>
+          </div>
+          <div className="safety-note publisher-safety"><FileCheck2 size={15} /> Excludes saves, logs, screenshots, caches and known per-user Minecraft files. Credential-shaped files or content stop the build for review.</div>
+          <button className="primary-action publisher-preview" onClick={() => void prepareRelease()} disabled={!canPrepareRelease}>
+            {busy ? <RefreshCw className="spin" size={17} /> : <Archive size={17} />} Prepare release locally
+          </button>
+        </section>
+
+        {releasePreview && (
+          <section className={`settings-section panel-card package-preview ${releasePreview.ready ? "ready" : "blocked"}`}>
+            <div className="section-title">{releasePreview.ready ? <CheckCircle2 /> : <ShieldAlert />}<div><h2>{releasePreview.ready ? "Release preview ready" : "Release blocked by safety checks"}</h2><p>{releasePreview.ready ? "The package and manifest exist locally. Nothing has been uploaded." : "No publishable package was produced. Resolve every issue and prepare again."}</p></div></div>
+            <dl className="pack-facts preview-facts">
+              <div><dt>Release</dt><dd>{releasePreview.repository} · {releasePreview.tag}</dd></div>
+              <div><dt>Inventory</dt><dd>{releasePreview.fileCount.toLocaleString()} files · {formatBytes(releasePreview.totalBytes)}</dd></div>
+              <div><dt>Excluded runtime entries</dt><dd>{releasePreview.excludedCount.toLocaleString()}</dd></div>
+              <div><dt>Changes</dt><dd>{releasePreview.added} added · {releasePreview.changed} changed · {releasePreview.removed} removed</dd></div>
+              {releasePreview.ready && <div><dt>Package</dt><dd>{formatBytes(releasePreview.packageBytes)} · SHA-256 {releasePreview.packageSha256.slice(0, 12)}…</dd></div>}
+              {releasePreview.ready && <div><dt>Local output</dt><dd title={releasePreview.outputDir}>{releasePreview.outputDir}</dd></div>}
+            </dl>
+            {releasePreview.issues.length > 0 && <ul className="safety-issues">{releasePreview.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>}
+            {releasePreview.ready && (
+              <>
+                <label className="confirmation-row"><input type="checkbox" checked={releaseConfirmed} onChange={(event) => setReleaseConfirmed(event.target.checked)} /><span>I confirm publication of immutable GitHub Release {releasePreview.tag} with exactly these reviewed ZIP and manifest assets.</span></label>
+                {!status?.authenticated && <p className="publish-gate">Run Check GitHub and authenticate before publication. The local preview remains available.</p>}
+                <button className="primary-action danger-action" onClick={() => void publishRelease()} disabled={!releaseConfirmed || !status?.authenticated || busy}>
+                  {busy ? <RefreshCw className="spin" size={17} /> : <CloudUpload size={17} />} Publish GitHub release
+                </button>
+              </>
+            )}
+          </section>
+        )}
+
+        {publication && <section className="settings-section panel-card creation-result"><CheckCircle2 /><div><h2>{publication.tag} published</h2><p>{publication.url || publication.message}</p></div></section>}
       </div>
     </main>
   );
+}
+
+function guessRepository(manifestUrl: string): string {
+  const match = manifestUrl.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\//i);
+  return match?.[1] ?? "";
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes / 1024;
+  let index = 0;
+  while (value >= 1024 && index < units.length - 1) {
+    value /= 1024;
+    index += 1;
+  }
+  return `${value.toFixed(value >= 100 ? 0 : 1)} ${units[index]}`;
 }
 
 function errorMessage(error: unknown): string {
