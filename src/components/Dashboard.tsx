@@ -5,7 +5,6 @@ import {
   CircleAlert,
   Clock3,
   Download,
-  FolderOpen,
   Gamepad2,
   Globe2,
   PackageOpen,
@@ -29,6 +28,7 @@ interface DashboardProps {
   onPlay: () => void;
   onVerifyFiles: () => void;
   onOpenUpdates: () => void;
+  onOpenSafeLaunch: () => void;
 }
 
 const labels: Record<ReadinessStatus, string> = {
@@ -41,7 +41,7 @@ const labels: Record<ReadinessStatus, string> = {
   failed: "CHECK FAILED",
 };
 
-export function Dashboard({ profile, health, manifest, verification, busy, onOpenSettings, onPlay, onVerifyFiles, onOpenUpdates }: DashboardProps) {
+export function Dashboard({ profile, health, manifest, verification, busy, onOpenSettings, onPlay, onVerifyFiles, onOpenUpdates, onOpenSafeLaunch }: DashboardProps) {
   const [tab, setTab] = useState<DetailTab>("overview");
   const ready = health.status === "ready";
   const verificationValue = verification
@@ -165,7 +165,9 @@ export function Dashboard({ profile, health, manifest, verification, busy, onOpe
               <button onClick={onVerifyFiles} disabled={busy || !profile.installDir || !manifest.valid || manifest.requiredFileCount === 0}>
                 <ShieldCheck /> Verify files <small>SHA-256 manifest check</small>
               </button>
-              <button disabled><FolderOpen /> Open files <small>Native scope next</small></button>
+              <button onClick={onOpenSafeLaunch} disabled={busy || !profile.installDir || !manifest.valid}>
+                <Gamepad2 /> Safe Launch <small>Optional extras isolated</small>
+              </button>
               <button onClick={onOpenSettings}><Settings2 /> Settings <small>Paths & updates</small></button>
             </div>
           </section>

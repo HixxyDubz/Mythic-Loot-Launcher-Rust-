@@ -1,8 +1,19 @@
-use std::{path::Path, process::Command};
+use std::{
+    path::Path,
+    process::{Child, Command},
+};
 
 use crate::models::{GameProfile, LaunchOutcome};
 
 pub fn launch(profile: &GameProfile) -> Result<LaunchOutcome, String> {
+    let child = spawn(profile)?;
+    Ok(LaunchOutcome {
+        pid: child.id(),
+        message: format!("Started {}", profile.display_name),
+    })
+}
+
+pub(crate) fn spawn(profile: &GameProfile) -> Result<Child, String> {
     let executable = Path::new(profile.game_exe_path.trim());
     if !executable.is_file() {
         return Err("The configured game executable does not exist".into());
@@ -11,16 +22,11 @@ pub fn launch(profile: &GameProfile) -> Result<LaunchOutcome, String> {
     let parent = executable
         .parent()
         .ok_or_else(|| "The game executable has no parent directory".to_string())?;
-    let child = Command::new(executable)
+    Command::new(executable)
         .args(&arguments)
         .current_dir(parent)
         .spawn()
-        .map_err(|error| format!("Could not start {}: {error}", profile.display_name))?;
-
-    Ok(LaunchOutcome {
-        pid: child.id(),
-        message: format!("Started {}", profile.display_name),
-    })
+        .map_err(|error| format!("Could not start {}: {error}", profile.display_name))
 }
 
 pub fn split_windows_args(input: &str) -> Result<Vec<String>, String> {

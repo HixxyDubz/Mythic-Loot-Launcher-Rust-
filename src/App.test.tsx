@@ -42,4 +42,22 @@ describe("Mythic Loot launcher shell", () => {
     expect(screen.queryByRole("button", { name: /apply verified/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /restore verified point/i })).not.toBeInTheDocument();
   });
+
+  it("keeps Safe Launch truthful when the manifest has no optional extras", async () => {
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: /complete setup/i }));
+    fireEvent.change(screen.getByLabelText("Game or launcher executable"), {
+      target: { value: "C:\\Games\\fixture.exe" },
+    });
+    fireEvent.change(screen.getByLabelText("Modpack base folder"), {
+      target: { value: "C:\\Modpacks\\Fixture" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save settings/i }));
+    const safeLaunch = await screen.findByRole("button", { name: /safe launch/i });
+    await waitFor(() => expect(safeLaunch).toBeEnabled());
+    fireEvent.click(safeLaunch);
+    expect(await screen.findByRole("heading", { name: "Safe Launch" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "No optional extras are declared" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /start safe launch/i })).not.toBeInTheDocument();
+  });
 });

@@ -31,5 +31,8 @@ zip = { version = "8.6", default-features = false, features = ["deflate"] }
 fs2 = "0.4"
 ureq = "3.4"
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading"] }
+
 [dev-dependencies]
 tempfile = "3"

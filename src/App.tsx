@@ -3,6 +3,7 @@ import "./App.css";
 import { bootstrap, detectInstallations, launchProfile, saveProfile, selectProfile, verifyProfileFiles } from "./api";
 import { Dashboard } from "./components/Dashboard";
 import { PublisherPanel } from "./components/PublisherPanel";
+import { SafeLaunchPanel } from "./components/SafeLaunchPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { Sidebar } from "./components/Sidebar";
 import { TitleBar } from "./components/TitleBar";
@@ -12,7 +13,7 @@ import type { BootstrapPayload, DetectedInstall, FileVerification, GameProfile }
 
 function App() {
   const [payload, setPayload] = useState<BootstrapPayload | null>(null);
-  const [page, setPage] = useState<"dashboard" | "settings" | "publisher" | "update">("dashboard");
+  const [page, setPage] = useState<"dashboard" | "settings" | "publisher" | "update" | "safeLaunch">("dashboard");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [fatalError, setFatalError] = useState("");
@@ -187,6 +188,14 @@ function App() {
                 onNotice={setNotice}
                 onCompleted={() => refreshAfterTransaction()}
               />
+            ) : page === "safeLaunch" ? (
+              <SafeLaunchPanel
+                profile={selectedProfile}
+                health={selectedHealth}
+                manifest={selectedManifest}
+                onBack={() => setPage("dashboard")}
+                onNotice={setNotice}
+              />
             ) : page === "settings" ? (
               <SettingsPanel
                 profile={selectedProfile}
@@ -208,6 +217,7 @@ function App() {
                 onPlay={() => void play()}
                 onVerifyFiles={() => void verifyFiles()}
                 onOpenUpdates={() => setPage("update")}
+                onOpenSafeLaunch={() => setPage("safeLaunch")}
               />
             )}
           </div>

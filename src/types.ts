@@ -228,3 +228,30 @@ export interface RestoreOutcome {
   message: string;
   error: string;
 }
+
+export interface SafeLaunchStatus {
+  profileId: string;
+  active: boolean;
+  sessionId: string;
+  installDir: string;
+  gameProcessId: number;
+  gameProcessRunning: boolean;
+  disabledFiles: number;
+  startedAt: number;
+  recoverable: boolean;
+  message: string;
+}
+
+export interface SafeLaunchOutcome {
+  profileId: string;
+  sessionId: string;
+  pid: number;
+  disabled: string[];
+  message: string;
+}
+
+export interface SafeLaunchRecovery {
+  profileId: string;
+  restored: string[];
+  message: string;
+}

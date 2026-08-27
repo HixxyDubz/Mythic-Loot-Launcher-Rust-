@@ -14,6 +14,9 @@ import type {
   RestoreOutcome,
   RestorePointSummary,
   RestorePreview,
+  SafeLaunchOutcome,
+  SafeLaunchRecovery,
+  SafeLaunchStatus,
   TransactionOutcome,
   TransactionPreview,
   TransactionRequest,
@@ -150,4 +153,42 @@ export async function deleteRestorePoint(
     throw new Error("Restore-point deletion is only available in the native Tauri app.");
   }
   return invoke<string>("delete_restore_point", { profileId, backupId, confirmed });
+}
+
+export async function getSafeLaunchStatus(profileId: string): Promise<SafeLaunchStatus> {
+  if (!runningInTauri) {
+    return {
+      profileId,
+      active: false,
+      sessionId: "",
+      installDir: "",
+      gameProcessId: 0,
+      gameProcessRunning: false,
+      disabledFiles: 0,
+      startedAt: 0,
+      recoverable: false,
+      message: "No Safe Launch session is active.",
+    };
+  }
+  return invoke<SafeLaunchStatus>("safe_launch_status", { profileId });
+}
+
+export async function startSafeLaunch(
+  profileId: string,
+  confirmed: boolean,
+): Promise<SafeLaunchOutcome> {
+  if (!runningInTauri) {
+    throw new Error("Safe Launch is only available in the native Tauri app.");
+  }
+  return invoke<SafeLaunchOutcome>("start_safe_launch", { profileId, confirmed });
+}
+
+export async function recoverSafeLaunch(
+  profileId: string,
+  confirmed: boolean,
+): Promise<SafeLaunchRecovery> {
+  if (!runningInTauri) {
+    throw new Error("Safe Launch recovery is only available in the native Tauri app.");
+  }
+  return invoke<SafeLaunchRecovery>("recover_safe_launch", { profileId, confirmed });
 }

@@ -6,6 +6,7 @@ mod packager;
 mod publisher;
 mod readiness;
 mod restore_points;
+mod safe_launch;
 mod safe_path;
 mod storage;
 mod updater;
@@ -15,6 +16,7 @@ use models::{BootstrapPayload, DetectedInstall, GameProfile, LaunchOutcome, Read
 use packager::{PackagePreview, PackageRequest, ReleasePublication};
 use publisher::{PublisherStatus, RepositoryCreation, RepositoryRequest};
 use restore_points::{RestoreOutcome, RestorePointSummary, RestorePreview};
+use safe_launch::{SafeLaunchOutcome, SafeLaunchRecovery, SafeLaunchStatus};
 use tauri::{AppHandle, Manager};
 use updater::{TransactionOutcome, TransactionPreview, TransactionRequest};
 
@@ -191,6 +193,33 @@ fn delete_restore_point(
 }
 
 #[tauri::command]
+fn safe_launch_status(app: AppHandle, profile_id: String) -> Result<SafeLaunchStatus, String> {
+    safe_launch::status(&app, &profile_id)
+}
+
+#[tauri::command]
+async fn start_safe_launch(
+    app: AppHandle,
+    profile_id: String,
+    confirmed: bool,
+) -> Result<SafeLaunchOutcome, String> {
+    tauri::async_runtime::spawn_blocking(move || safe_launch::start(&app, &profile_id, confirmed))
+        .await
+        .map_err(|error| format!("Safe Launch task failed: {error}"))?
+}
+
+#[tauri::command]
+async fn recover_safe_launch(
+    app: AppHandle,
+    profile_id: String,
+    confirmed: bool,
+) -> Result<SafeLaunchRecovery, String> {
+    tauri::async_runtime::spawn_blocking(move || safe_launch::recover(&app, &profile_id, confirmed))
+        .await
+        .map_err(|error| format!("Safe Launch recovery task failed: {error}"))?
+}
+
+#[tauri::command]
 async fn verify_profile_files(
     app: AppHandle,
     profile_id: String,
@@ -262,6 +291,9 @@ pub fn run() {
             prepare_restore_point,
             apply_restore_point,
             delete_restore_point,
+            safe_launch_status,
+            start_safe_launch,
+            recover_safe_launch,
             verify_profile_files,
             launch_profile
         ])
