@@ -11,7 +11,7 @@ The Python launcher remains the behavior reference. This file records the new Ru
 | Rust configuration store | Verified local | Schema 2 contains server-free modpack profiles. Schema 1 migrates atomically while preserving user paths and converts the two old default names. Tests cover defaults, migration, round-trip persistence and corrupt-file preservation. |
 | Built-in catalogue | Foundation | All twelve MLLP game IDs and custom fallback metadata are represented. Full adapter behavior is not ported. |
 | Minecraft detection | Foundation | Common CurseForge, official and launcher locations are scanned. Full 85-install parity and metadata selection are not yet proven. |
-| 7DTD/Steam detection | Foundation | Default and VDF-listed Steam libraries are scanned. Runtime acceptance is pending. |
+| 7DTD/Steam detection | Verified local foundation | Default and VDF-listed Steam libraries are scanned. Selecting a detected game keeps the Steam root as `gameDir` and derives its `Mods` child as the managed installation/publishing root. Pure path and Settings interaction regressions pass. Real clean-machine detection remains pending. |
 | Trusted manifest contract | Verified local | The actual Minecraft v1.0.1 inventory (2,067 required files and two obsolete paths) and 7DTD v1.0.0 manifest are compile-time bundled. Version 1 validation rejects unsafe paths, Windows aliases/ADS, invalid hashes, case collisions, obsolete overlap and unsupported URLs. Legacy server metadata is ignored. |
 | Required-file verification | Verified local | Rust streams SHA-256 comparisons after safe path resolution and reports current, missing, changed and unsafe entries without modifying the install. Dashboard action is enabled after a pack directory is configured. |
 | Readiness | Foundation | Game executable, pack directory, trusted manifest and manifest-sourced version gates are live. No network/server state participates. A completed file check can surface Repair Needed in the current session. Runtime/Java and Smart Launch orchestration remain. |
@@ -31,14 +31,14 @@ The Python launcher remains the behavior reference. This file records the new Ru
 ## Verification snapshot
 
 - `cargo test --manifest-path src-tauri/Cargo.toml`: 41 passed, including schema/config recovery, bundled manifests, adversarial paths, streaming hashes, deterministic publishing, privacy scanning, fail-closed GitHub actions, changed-file repair, update rollback, restore staging, update-created path removal, unsafe/legacy backup rejection, five-point retention, restore rollback and Safe Launch recovery guards.
-- `npm run test`: 4 passed.
+- `npm run test`: 6 passed.
 - `npm run build`: TypeScript and Vite production build passed; 1,831 modules transformed.
 - `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings`: passed.
-- `npm run tauri build -- --no-bundle`: fresh server-free native release built successfully.
-- Release executable: 16,705,024 bytes; SHA-256 `C9927B7A3B6EB221E00E256AA67E21BF4BEACB7847651267B70D3F06FE9892D7`.
-- Isolated-data native smoke: responsive at the four-second sample, 29.5 MB working set, schema 2, two profiles, and no `serverName`, `serverIp` or `serverPort` keys; temporary data was removed afterward.
+- `npm run package:windows`: NSIS installer and portable win-unpacked executable built and copied into the ignored `artifacts/windows` handoff folder with a SHA-256 manifest.
 - Browser visual check: the Update & Repair, Recovery history and Safe Launch workspaces passed at 1180x760 and 940x640 without horizontal overflow. Safe Launch truthfully showed that the bundled manifest has no optional extras, omitted the unavailable Start action, remained readable and logged no browser warnings or errors.
+- Packaged handoff: installer is 5,093,005 bytes with SHA-256 `1D7AAAFF408192566C1ECD59B0B36756EBCA1FB64F6B01D7E80A2CBEF0A26338`; win-unpacked executable is 16,705,024 bytes with SHA-256 `1750CC422733146E4AFAD9F705497E2B838DC60364E91574CCECD56E46206816`. The portable executable was responsive after four seconds with a 40.6 MB working set under isolated schema-2 data with two profiles and no server keys; temporary data was removed afterward. The installer was built but not installed during this checkpoint.
+- Live 7DTD source audit was read-only: `C:\Program Files (x86)\Steam\steamapps\common\7 Days To Die\Mods` contains 186 top-level folders and 4,107 files totalling 2,927,899,865 bytes (2.727 GiB), with no reparse points. This is the correct publishing root, but it exceeds the current single-asset safety limit, so multipart publishing is required before the launcher can package it.
 
 ## External acceptance boundary
 
-Server acceptance is not a launcher gate because servers are managed elsewhere. A full real-package GitHub update/repair, real large-installation restore, authenticated GitHub repository creation/release publication, multipart publication, separate Player/Developer artifacts, a real-game Safe Launch using a trusted manifest with optional files, and friend-machine modpack acceptance are not part of this checkpoint.
+Server acceptance is not a launcher gate because servers are managed elsewhere. A full real-package GitHub update/repair, real large-installation restore, authenticated GitHub repository creation/release publication, multipart publication for the measured 2.727 GiB 7DTD source, separate Player/Developer artifacts, a real-game Safe Launch using a trusted manifest with optional files, and friend-machine modpack acceptance are not part of this checkpoint.

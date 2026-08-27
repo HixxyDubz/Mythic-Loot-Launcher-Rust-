@@ -79,19 +79,23 @@ export function SettingsPanel({
             <div className="detection-results">
               <div className="results-title"><Radar size={16} /> Detected installations <span>{candidates.length}</span></div>
               {candidates.map((candidate) => {
-                const selected = draft.installDir === candidate.installDir && (!candidate.exePath || draft.gameExePath === candidate.exePath);
+                const modpackDir = detectedModpackBase(candidate.installDir, draft.deploymentSubdir);
+                const selected = pathsEqual(draft.installDir, modpackDir) && (!candidate.exePath || pathsEqual(draft.gameExePath, candidate.exePath));
                 return (
                   <button
                     key={`${candidate.source}-${candidate.installDir}`}
                     className={selected ? "selected" : ""}
                     onClick={() => setDraft((current) => ({
                       ...current,
-                      installDir: candidate.installDir,
+                      installDir: modpackDir,
                       gameDir: candidate.installDir,
                       gameExePath: candidate.exePath ?? current.gameExePath,
                     }))}
                   >
-                    <span><strong>{candidate.label}</strong><small>{candidate.installDir}</small></span>
+                    <span>
+                      <strong>{candidate.label}</strong>
+                      <small>{draft.deploymentSubdir ? `${candidate.installDir} · manages ${modpackDir}` : candidate.installDir}</small>
+                    </span>
                     {selected ? <Check size={17} /> : <span className="use-label">Use</span>}
                   </button>
                 );
@@ -110,6 +114,18 @@ export function SettingsPanel({
       </div>
     </main>
   );
+}
+
+export function detectedModpackBase(gameDir: string, deploymentSubdir: string): string {
+  const root = gameDir.trim().replace(/[\\/]+$/, "");
+  const subdir = deploymentSubdir.trim().replace(/^[\\/]+|[\\/]+$/g, "");
+  if (!root || !subdir) return root;
+  const separator = root.includes("\\") ? "\\" : "/";
+  return `${root}${separator}${subdir}`;
+}
+
+function pathsEqual(left: string, right: string): boolean {
+  return left.replace(/\//g, "\\").toLowerCase() === right.replace(/\//g, "\\").toLowerCase();
 }
 
 function Field({

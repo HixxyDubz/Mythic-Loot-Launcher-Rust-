@@ -46,6 +46,8 @@ React does not receive arbitrary shell or filesystem access. Native operations a
 
 The native store resolves through Tauri's application data directory. `MYTHIC_LOOT_DATA_DIR` overrides it only when explicitly set, which supports portable development and isolated acceptance runs. Invalid JSON is renamed to a timestamped `launcher-config.corrupt-*.json` before a fresh default is created.
 
+Detected game roots and managed modpack roots are distinct. For 7 Days to Die, detection records the Steam game folder for launching and its `Mods` child as the installation/publishing root because generated manifest paths are relative to `Mods`. Minecraft currently has no deployment subdirectory and therefore uses its detected instance root directly.
+
 ## Transaction boundary
 
 Update preparation resolves the trusted manifest, downloads or copies the package into launcher-owned storage, rejects unsafe ZIP members, extracts only required changed files, and verifies the staged SHA-256 inventory before returning a preview. Apply accepts only that cached preview identifier plus explicit confirmation. It revalidates staged files, creates a backup of affected live paths, journals new paths, applies replacements/removals, verifies the complete live manifest, and restores overwritten, created, obsolete, and version-marker state if any apply or finalization step fails.

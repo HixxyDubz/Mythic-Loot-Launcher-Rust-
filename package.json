@@ -9,6 +9,7 @@
     "check": "npm run test && npm run build",
     "test": "vitest run",
     "preview": "vite preview",
+    "package:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Build-WindowsArtifacts.ps1",
     "tauri": "tauri"
   },
   "dependencies": {

@@ -1,8 +1,44 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { detectedModpackBase, SettingsPanel } from "./components/SettingsPanel";
+import { previewProfiles } from "./mock";
 
 describe("Mythic Loot launcher shell", () => {
+  it("keeps a detected game root separate from its managed modpack subfolder", () => {
+    expect(detectedModpackBase("C:\\Games\\7 Days To Die", "Mods")).toBe("C:\\Games\\7 Days To Die\\Mods");
+    expect(detectedModpackBase("C:\\Games\\Minecraft", "")).toBe("C:\\Games\\Minecraft");
+  });
+
+  it("applies the 7DTD Mods child when a detected Steam install is selected", () => {
+    const onSave = vi.fn();
+    render(
+      <SettingsPanel
+        profile={previewProfiles[1]}
+        dataDir="Browser preview"
+        busy={false}
+        candidates={[{
+          label: "Steam · 7 Days To Die",
+          exePath: "C:\\Games\\7 Days To Die\\7DaysToDie.exe",
+          installDir: "C:\\Games\\7 Days To Die",
+          source: "steam",
+        }]}
+        onBack={() => undefined}
+        onDetect={() => undefined}
+        onSave={onSave}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Steam · 7 Days To Die/ }));
+    expect(screen.getByLabelText("Game directory")).toHaveValue("C:\\Games\\7 Days To Die");
+    expect(screen.getByLabelText("Modpack base folder")).toHaveValue("C:\\Games\\7 Days To Die\\Mods");
+    fireEvent.click(screen.getByRole("button", { name: /save settings/i }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      gameDir: "C:\\Games\\7 Days To Die",
+      installDir: "C:\\Games\\7 Days To Die\\Mods",
+    }));
+  });
+
   it("loads truthful first-run readiness and opens settings", async () => {
     render(<App />);
     expect(await screen.findByRole("heading", { name: "Mythic Loot Minecraft" })).toBeInTheDocument();
