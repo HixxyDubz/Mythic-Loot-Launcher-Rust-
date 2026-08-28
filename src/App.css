@@ -178,6 +178,11 @@ h1, h2, h3, p { margin-top: 0; }
 .publisher-status strong { font-size: 10px; }
 .publisher-status small { color: #82758f; font-size: 9px; }
 .publisher-preview { margin-top: 18px; }
+.release-assets { display: grid; gap: 7px; margin-top: 14px; padding: 12px; border: 1px solid rgba(149,116,189,.14); border-radius: 9px; background: rgba(255,255,255,.018); }
+.release-assets > strong { color: #b8a9c8; font-size: 9px; text-transform: uppercase; letter-spacing: .07em; }
+.release-assets span { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 12px; padding-top: 7px; border-top: 1px solid rgba(149,116,189,.09); }
+.release-assets b { overflow: hidden; color: #d8cfdf; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.release-assets small { flex: 0 0 auto; color: #786c85; font-size: 8px; }
 .confirmation-row { display: flex; align-items: center; gap: 9px; margin: 17px 0 13px; color: #b7a8c5; font-size: 9px; }
 .confirmation-row input { accent-color: var(--purple); }
 .danger-action { background: linear-gradient(100deg, #8647c9, #a559ef); }

@@ -16,13 +16,15 @@ use walkdir::WalkDir;
 use zip::{CompressionMethod, DateTime, ZipArchive, ZipWriter, write::SimpleFileOptions};
 
 use crate::{
-    manifest::{self, FileEntry, Manifest},
+    manifest::{self, FileEntry, Manifest, UpdatePart},
     models::GameProfile,
     publisher, safe_path, storage,
 };
 
 const TEXT_SCAN_LIMIT: u64 = 32 * 1024 * 1024;
 const SINGLE_ASSET_LIMIT: u64 = 2 * 1024 * 1024 * 1024;
+const MULTIPART_PART_SIZE: u64 = 1024 * 1024 * 1024;
+const MAX_RELEASE_PARTS: usize = 999;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -52,11 +54,22 @@ pub struct PackagePreview {
     pub total_bytes: u64,
     pub package_bytes: u64,
     pub package_sha256: String,
+    pub multipart: bool,
+    pub assets: Vec<PackageAssetPreview>,
     pub added: usize,
     pub changed: usize,
     pub removed: usize,
     pub issues: Vec<String>,
     pub ready: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackageAssetPreview {
+    pub file_name: String,
+    pub path: String,
+    pub bytes: u64,
+    pub sha256: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,10 +96,17 @@ struct ReleasePlan {
     title: String,
     notes: String,
     output_dir: PathBuf,
-    package_path: PathBuf,
+    assets: Vec<ReleaseAsset>,
     manifest_path: PathBuf,
-    package_sha256: String,
     manifest_sha256: String,
+}
+
+#[derive(Debug, Clone)]
+struct ReleaseAsset {
+    file_name: String,
+    path: PathBuf,
+    bytes: u64,
+    sha256: String,
 }
 
 static RELEASE_PLANS: OnceLock<Mutex<HashMap<String, ReleasePlan>>> = OnceLock::new();
@@ -122,6 +142,31 @@ fn prepare_at(
     user_profile: &str,
     remember_plan: bool,
 ) -> Result<PackagePreview, String> {
+    prepare_at_with_limits(
+        profile,
+        base,
+        request,
+        output_root,
+        username,
+        user_profile,
+        remember_plan,
+        SINGLE_ASSET_LIMIT,
+        MULTIPART_PART_SIZE,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn prepare_at_with_limits(
+    profile: &GameProfile,
+    base: &Manifest,
+    request: &PackageRequest,
+    output_root: &Path,
+    username: &str,
+    user_profile: &str,
+    remember_plan: bool,
+    single_asset_limit: u64,
+    multipart_part_size: u64,
+) -> Result<PackagePreview, String> {
     let version = validate_request(profile, request)?;
     let repository = request.repository.trim();
     let source = fs::canonicalize(request.source_dir.trim())
@@ -152,12 +197,6 @@ fn prepare_at(
         .iter()
         .try_fold(0_u64, |total, file| total.checked_add(file.size))
         .ok_or_else(|| "The source inventory is too large to represent safely".to_string())?;
-    if total_bytes >= SINGLE_ASSET_LIMIT {
-        issues.push(
-            "The source is 2 GiB or larger. Multipart release assets are not implemented yet."
-                .into(),
-        );
-    }
     if scan.files.is_empty() {
         issues.push("The source folder contains no publishable modpack files".into());
     }
@@ -187,6 +226,8 @@ fn prepare_at(
         total_bytes,
         package_bytes: 0,
         package_sha256: String::new(),
+        multipart: false,
+        assets: Vec::new(),
         added,
         changed,
         removed: removed_paths.len(),
@@ -218,19 +259,19 @@ fn prepare_at(
         .metadata()
         .map_err(|error| format!("Could not inspect package: {error}"))?
         .len();
-    if package_bytes >= SINGLE_ASSET_LIMIT {
-        fs::remove_file(&package_path).ok();
-        preview.issues.push(
-            "The compressed package is 2 GiB or larger. Multipart release assets are not implemented yet."
-                .into(),
-        );
-        return Ok(preview);
-    }
     let package_sha256 = manifest::sha256(&package_path)?;
     let release_root = format!(
         "https://github.com/{}/releases/download/{}",
         repository, tag
     );
+    let multipart = package_bytes >= single_asset_limit;
+    let assets = prepare_release_assets(
+        &package_path,
+        &output_dir,
+        &package_name,
+        multipart,
+        multipart_part_size,
+    )?;
     let mut generated = base.clone();
     generated.manifest_version = "1.0".into();
     generated.profile_id = profile.id.clone();
@@ -238,16 +279,31 @@ fn prepare_at(
     generated.display_name = profile.display_name.clone();
     generated.required_game_version = profile.required_game_version.clone();
     generated.modpack_version = version.clone();
-    generated.update_url = format!("{release_root}/{package_name}");
+    generated.update_url = if multipart {
+        String::new()
+    } else {
+        format!("{release_root}/{}", assets[0].file_name)
+    };
     generated.update_sha256 = package_sha256.clone();
-    generated.update_parts.clear();
+    generated.update_parts = if multipart {
+        assets
+            .iter()
+            .map(|asset| UpdatePart {
+                url: format!("{release_root}/{}", asset.file_name),
+                sha256: asset.sha256.clone(),
+                size: i64::try_from(asset.bytes).unwrap_or(i64::MAX),
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
     generated.release_date = request.release_date.clone();
     generated.files = scan.files.iter().map(file_entry).collect();
     generated.obsolete_files = removed_paths;
     generated.optional_files.clear();
     let errors = manifest::validate(&generated, Some(profile));
     if !errors.is_empty() {
-        fs::remove_file(&package_path).ok();
+        remove_assets(&assets);
         preview.issues = errors
             .into_iter()
             .map(|error| format!("Generated manifest: {error}"))
@@ -257,10 +313,16 @@ fn prepare_at(
     write_json(&manifest_path, &generated)?;
     let manifest_sha256 = manifest::sha256(&manifest_path)?;
 
-    preview.package_path = package_path.display().to_string();
+    preview.package_path = if multipart {
+        String::new()
+    } else {
+        assets[0].path.display().to_string()
+    };
     preview.manifest_path = manifest_path.display().to_string();
     preview.package_bytes = package_bytes;
     preview.package_sha256 = package_sha256.clone();
+    preview.multipart = multipart;
+    preview.assets = assets.iter().map(asset_preview).collect();
     preview.ready = true;
 
     if remember_plan {
@@ -270,9 +332,8 @@ fn prepare_at(
             title: format!("{} {}", profile.display_name, version),
             notes: request.release_notes.trim().to_string(),
             output_dir,
-            package_path,
+            assets,
             manifest_path,
-            package_sha256,
             manifest_sha256,
         };
         release_plans()
@@ -321,23 +382,24 @@ pub fn publish(preview_id: &str, confirmed: bool) -> Result<ReleasePublication, 
         ));
     }
 
-    let package = plan.package_path.to_string_lossy().to_string();
     let manifest = plan.manifest_path.to_string_lossy().to_string();
-    let arguments = [
-        "release",
-        "create",
-        plan.tag.as_str(),
-        package.as_str(),
-        manifest.as_str(),
-        "--repo",
-        plan.repository.as_str(),
-        "--title",
-        plan.title.as_str(),
-        "--notes",
-        plan.notes.as_str(),
-        "--latest",
-    ];
-    let output = publisher::run_gh(arguments)?;
+    let mut arguments = vec!["release".into(), "create".into(), plan.tag.clone()];
+    arguments.extend(
+        plan.assets
+            .iter()
+            .map(|asset| asset.path.to_string_lossy().to_string()),
+    );
+    arguments.extend([
+        manifest,
+        "--repo".into(),
+        plan.repository.clone(),
+        "--title".into(),
+        plan.title.clone(),
+        "--notes".into(),
+        plan.notes.clone(),
+        "--latest".into(),
+    ]);
+    let output = publisher::run_gh(arguments.iter().map(String::as_str))?;
     if !output.status.success() {
         return Err(publisher::output_message(
             &output,
@@ -353,7 +415,10 @@ pub fn publish(preview_id: &str, confirmed: bool) -> Result<ReleasePublication, 
         repository: plan.repository,
         tag: plan.tag,
         url,
-        message: "GitHub Release created with the reviewed package and manifest assets.".into(),
+        message: format!(
+            "GitHub Release created with {} reviewed package asset(s) and the manifest.",
+            plan.assets.len()
+        ),
     })
 }
 
@@ -513,6 +578,26 @@ fn should_exclude(relative: &Path, is_directory: bool) -> bool {
     }
     if is_directory {
         return false;
+    }
+    if parts.last().is_some_and(|name| {
+        let (stem, extension) = name.rsplit_once('.').unwrap_or((name, ""));
+        matches!(extension, "txt" | "md" | "rtf" | "html" | "pdf")
+            && [
+                "readme",
+                "changelog",
+                "change_log",
+                "license",
+                "licence",
+                "credits",
+            ]
+            .iter()
+            .any(|prefix| {
+                stem == *prefix
+                    || stem.starts_with(&format!("{prefix}_"))
+                    || stem.starts_with(&format!("{prefix}-"))
+            })
+    }) {
+        return true;
     }
     matches!(
         parts.last().map(String::as_str),
@@ -740,6 +825,133 @@ fn create_zip(path: &Path, files: &[SourceFile]) -> Result<(), String> {
     Ok(())
 }
 
+fn prepare_release_assets(
+    package_path: &Path,
+    output_dir: &Path,
+    package_name: &str,
+    multipart: bool,
+    part_size: u64,
+) -> Result<Vec<ReleaseAsset>, String> {
+    if !multipart {
+        let bytes = package_path
+            .metadata()
+            .map_err(|error| format!("Could not inspect release package: {error}"))?
+            .len();
+        return Ok(vec![ReleaseAsset {
+            file_name: package_name.into(),
+            path: package_path.to_path_buf(),
+            bytes,
+            sha256: manifest::sha256(package_path)?,
+        }]);
+    }
+    split_package(package_path, output_dir, package_name, part_size)
+}
+
+fn split_package(
+    package_path: &Path,
+    output_dir: &Path,
+    package_name: &str,
+    part_size: u64,
+) -> Result<Vec<ReleaseAsset>, String> {
+    if part_size == 0 {
+        return Err("Multipart release part size must be greater than zero".into());
+    }
+    let package_bytes = package_path
+        .metadata()
+        .map_err(|error| format!("Could not inspect package before splitting: {error}"))?
+        .len();
+    let part_count = package_bytes.div_ceil(part_size);
+    if part_count == 0
+        || usize::try_from(part_count)
+            .ok()
+            .is_none_or(|count| count > MAX_RELEASE_PARTS)
+    {
+        return Err(format!(
+            "The package requires {part_count} release parts; the safe limit is {MAX_RELEASE_PARTS}"
+        ));
+    }
+
+    let mut created = Vec::new();
+    let result = (|| {
+        let mut input = BufReader::new(
+            File::open(package_path)
+                .map_err(|error| format!("Could not reopen package for splitting: {error}"))?,
+        );
+        let mut assets = Vec::with_capacity(usize::try_from(part_count).unwrap_or(0));
+        let mut buffer = vec![0_u8; 1024 * 1024];
+        for index in 0..part_count {
+            let file_name = format!("{package_name}.part{:03}", index + 1);
+            let path = output_dir.join(&file_name);
+            let mut output = BufWriter::new(File::create(&path).map_err(|error| {
+                format!("Could not create release part {}: {error}", index + 1)
+            })?);
+            created.push(path.clone());
+            let mut digest = Sha256::new();
+            let mut written = 0_u64;
+            while written < part_size {
+                let remaining = part_size - written;
+                let capacity =
+                    usize::try_from(remaining.min(buffer.len() as u64)).unwrap_or(buffer.len());
+                let count = input.read(&mut buffer[..capacity]).map_err(|error| {
+                    format!("Could not read package part {}: {error}", index + 1)
+                })?;
+                if count == 0 {
+                    break;
+                }
+                output.write_all(&buffer[..count]).map_err(|error| {
+                    format!("Could not write package part {}: {error}", index + 1)
+                })?;
+                digest.update(&buffer[..count]);
+                written += u64::try_from(count).unwrap_or(0);
+            }
+            output
+                .flush()
+                .map_err(|error| format!("Could not flush package part {}: {error}", index + 1))?;
+            if written == 0 {
+                return Err(format!("Package part {} would be empty", index + 1));
+            }
+            assets.push(ReleaseAsset {
+                file_name,
+                path,
+                bytes: written,
+                sha256: format!("{:x}", digest.finalize()),
+            });
+        }
+        let total = assets
+            .iter()
+            .try_fold(0_u64, |sum, asset| sum.checked_add(asset.bytes));
+        if total != Some(package_bytes) {
+            return Err(
+                "Multipart release parts do not reconstruct the complete package size".into(),
+            );
+        }
+        fs::remove_file(package_path)
+            .map_err(|error| format!("Could not remove the split source package: {error}"))?;
+        Ok(assets)
+    })();
+    if result.is_err() {
+        for path in created {
+            fs::remove_file(path).ok();
+        }
+    }
+    result
+}
+
+fn asset_preview(asset: &ReleaseAsset) -> PackageAssetPreview {
+    PackageAssetPreview {
+        file_name: asset.file_name.clone(),
+        path: asset.path.display().to_string(),
+        bytes: asset.bytes,
+        sha256: asset.sha256.clone(),
+    }
+}
+
+fn remove_assets(assets: &[ReleaseAsset]) {
+    for asset in assets {
+        fs::remove_file(&asset.path).ok();
+    }
+}
+
 fn validate_zip(path: &Path, expected: &[SourceFile]) -> Result<(), String> {
     let file = File::open(path).map_err(|error| format!("Could not reopen package: {error}"))?;
     let mut archive =
@@ -793,15 +1005,25 @@ fn release_plans() -> &'static Mutex<HashMap<String, ReleasePlan>> {
 }
 
 fn validate_plan(plan: &ReleasePlan) -> Result<(), String> {
-    for path in [&plan.package_path, &plan.manifest_path] {
+    if plan.assets.is_empty() {
+        return Err("The reviewed release contains no package assets".into());
+    }
+    for path in plan
+        .assets
+        .iter()
+        .map(|asset| &asset.path)
+        .chain(std::iter::once(&plan.manifest_path))
+    {
         let canonical = fs::canonicalize(path)
             .map_err(|error| format!("A reviewed release asset is unavailable: {error}"))?;
         if !canonical.starts_with(&plan.output_dir) || !canonical.is_file() {
             return Err("A reviewed release asset escaped its native preview folder".into());
         }
     }
-    if manifest::sha256(&plan.package_path)? != plan.package_sha256
-        || manifest::sha256(&plan.manifest_path)? != plan.manifest_sha256
+    if plan.assets.iter().any(|asset| {
+        asset.path.metadata().map(|value| value.len()).ok() != Some(asset.bytes)
+            || manifest::sha256(&asset.path).ok().as_deref() != Some(asset.sha256.as_str())
+    }) || manifest::sha256(&plan.manifest_path)? != plan.manifest_sha256
     {
         return Err("A reviewed release asset changed after preview; prepare it again".into());
     }
@@ -917,6 +1139,72 @@ mod tests {
     }
 
     #[test]
+    fn builds_ordered_multipart_assets_that_reconstruct_the_verified_zip() {
+        let source = TempDir::new().unwrap();
+        fs::create_dir_all(source.path().join("Mods/Example")).unwrap();
+        let content: Vec<u8> = (0_u8..=255).cycle().take(4096).collect();
+        fs::write(source.path().join("Mods/Example/example.dll"), &content).unwrap();
+        let output = TempDir::new().unwrap();
+        let preview = prepare_at_with_limits(
+            &profile(),
+            &Manifest {
+                manifest_version: "1.0".into(),
+                profile_id: "fixture".into(),
+                game: "minecraft".into(),
+                modpack_version: "1.0.0".into(),
+                ..Manifest::default()
+            },
+            &request(source.path()),
+            output.path(),
+            "FixtureUser",
+            r"C:\Users\FixtureUser",
+            false,
+            1,
+            64,
+        )
+        .unwrap();
+
+        assert!(preview.ready, "{:?}", preview.issues);
+        assert!(preview.multipart);
+        assert!(preview.assets.len() > 1);
+        assert!(preview.package_path.is_empty());
+        assert!(preview.assets.iter().all(|asset| asset.bytes <= 64));
+        assert_eq!(
+            preview.assets.iter().map(|asset| asset.bytes).sum::<u64>(),
+            preview.package_bytes
+        );
+
+        let generated: Manifest =
+            serde_json::from_slice(&fs::read(&preview.manifest_path).unwrap()).unwrap();
+        assert!(generated.update_url.is_empty());
+        assert_eq!(generated.update_sha256, preview.package_sha256);
+        assert_eq!(generated.update_parts.len(), preview.assets.len());
+        for (part, asset) in generated.update_parts.iter().zip(&preview.assets) {
+            assert!(part.url.ends_with(&asset.file_name));
+            assert_eq!(part.sha256, asset.sha256);
+            assert_eq!(u64::try_from(part.size).unwrap(), asset.bytes);
+        }
+
+        let assembled = output.path().join("assembled.zip");
+        let mut combined = File::create(&assembled).unwrap();
+        for asset in &preview.assets {
+            io::copy(&mut File::open(&asset.path).unwrap(), &mut combined).unwrap();
+        }
+        drop(combined);
+        assert_eq!(
+            manifest::sha256(&assembled).unwrap(),
+            preview.package_sha256
+        );
+        let mut zip = ZipArchive::new(File::open(assembled).unwrap()).unwrap();
+        let mut packaged = Vec::new();
+        zip.by_name("Mods/Example/example.dll")
+            .unwrap()
+            .read_to_end(&mut packaged)
+            .unwrap();
+        assert_eq!(packaged, content);
+    }
+
+    #[test]
     fn privacy_scan_reaches_large_text_and_ignores_incidental_root_path() {
         let source = TempDir::new().unwrap();
         let mut content = vec![b'x'; 4 * 1024 * 1024];
@@ -955,11 +1243,116 @@ mod tests {
     }
 
     #[test]
+    fn excludes_upstream_documentation_without_hiding_runtime_files() {
+        let source = TempDir::new().unwrap();
+        fs::create_dir_all(source.path().join("ExampleMod")).unwrap();
+        fs::write(source.path().join("ExampleMod/runtime.dll"), b"runtime").unwrap();
+        fs::write(
+            source.path().join("ExampleMod/CHANGELOG_v3.0.txt"),
+            b"contact=upstream@example.com",
+        )
+        .unwrap();
+        fs::write(
+            source.path().join("ExampleMod/README.txt"),
+            br"example=C:\Users\Example\Mods",
+        )
+        .unwrap();
+
+        let scan = scan_source(source.path(), "FixtureUser", "").unwrap();
+        assert!(scan.issues.is_empty(), "{:?}", scan.issues);
+        assert_eq!(scan.files.len(), 1);
+        assert_eq!(scan.files[0].relative, "ExampleMod/runtime.dll");
+        assert_eq!(scan.excluded_count, 2);
+    }
+
+    #[test]
     fn release_publication_is_fail_closed_before_github_is_called() {
         assert!(
             publish("not-a-preview", false)
                 .unwrap_err()
                 .contains("explicit confirmation")
         );
+    }
+
+    #[test]
+    fn cached_release_plan_rehashes_every_reviewed_part() {
+        let output = TempDir::new().unwrap();
+        let output_dir = fs::canonicalize(output.path()).unwrap();
+        let part = output_dir.join("fixture.zip.part001");
+        let manifest_path = output_dir.join("fixture-manifest.json");
+        fs::write(&part, b"reviewed part").unwrap();
+        fs::write(&manifest_path, b"reviewed manifest").unwrap();
+        let plan = ReleasePlan {
+            repository: "owner/repository".into(),
+            tag: "v1.0.0".into(),
+            title: "Fixture".into(),
+            notes: "Fixture".into(),
+            output_dir,
+            assets: vec![ReleaseAsset {
+                file_name: "fixture.zip.part001".into(),
+                path: part.clone(),
+                bytes: part.metadata().unwrap().len(),
+                sha256: manifest::sha256(&part).unwrap(),
+            }],
+            manifest_path: manifest_path.clone(),
+            manifest_sha256: manifest::sha256(&manifest_path).unwrap(),
+        };
+        assert!(validate_plan(&plan).is_ok());
+        fs::write(&part, b"changed after preview").unwrap();
+        assert!(
+            validate_plan(&plan)
+                .unwrap_err()
+                .contains("changed after preview")
+        );
+    }
+
+    #[test]
+    #[ignore = "requires MYTHIC_LOOT_7DTD_SOURCE and several GiB of temporary disk space"]
+    fn live_7dtd_source_builds_a_verified_multipart_release() {
+        let source = PathBuf::from(
+            env::var("MYTHIC_LOOT_7DTD_SOURCE")
+                .expect("Set MYTHIC_LOOT_7DTD_SOURCE to the live read-only Mods folder"),
+        );
+        let mut profile = profile();
+        profile.id = "seven_days_main".into();
+        profile.game = "seven_days".into();
+        profile.display_name = "Mythic Loot 7 Days".into();
+        profile.required_game_version = "1.0".into();
+        let base: Manifest =
+            serde_json::from_str(include_str!("../resources/manifests/seven_days_main.json"))
+                .unwrap();
+        let request = PackageRequest {
+            profile_id: profile.id.clone(),
+            source_dir: source.display().to_string(),
+            version: "1.0.1-acceptance".into(),
+            release_date: "2026-08-28".into(),
+            repository: "HixxyDubz/Mythic-Loot-7DTD-Modpack".into(),
+            release_notes: "Local acceptance only; never published".into(),
+        };
+        let output = TempDir::new().unwrap();
+        let username = env::var("USERNAME").unwrap_or_default();
+        let user_profile = env::var("USERPROFILE").unwrap_or_default();
+
+        let preview = prepare_at(
+            &profile,
+            &base,
+            &request,
+            output.path(),
+            &username,
+            &user_profile,
+            false,
+        )
+        .unwrap();
+        assert!(preview.ready, "{:?}", preview.issues);
+        assert!(preview.multipart);
+        assert!(preview.assets.len() > 1);
+        assert_eq!(
+            preview.assets.iter().map(|asset| asset.bytes).sum::<u64>(),
+            preview.package_bytes
+        );
+        let manifest: Manifest =
+            serde_json::from_slice(&fs::read(&preview.manifest_path).unwrap()).unwrap();
+        assert!(manifest::validate(&manifest, Some(&profile)).is_empty());
+        assert_eq!(manifest.update_parts.len(), preview.assets.len());
     }
 }

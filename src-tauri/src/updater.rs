@@ -366,6 +366,15 @@ fn prepare_package(
         combined
             .flush()
             .map_err(|error| format!("Could not finish multipart assembly: {error}"))?;
+        drop(combined);
+        if !manifest.update_sha256.trim().is_empty()
+            && !manifest::sha256(&package)?.eq_ignore_ascii_case(&manifest.update_sha256)
+        {
+            fs::remove_file(&package).ok();
+            return Err(
+                "Reassembled update package SHA-256 does not match the trusted manifest".into(),
+            );
+        }
         return Ok(format!(
             "{} verified release parts",
             manifest.update_parts.len()
@@ -1136,6 +1145,63 @@ mod tests {
             archive.write_all(bytes).unwrap();
         }
         archive.finish().unwrap();
+    }
+
+    fn multipart_manifest(package: &Path, parts: &[PathBuf]) -> Manifest {
+        let mut manifest = manifest(vec![("mods/example.jar", b"multipart")]);
+        manifest.update_sha256 = crate::manifest::sha256(package).unwrap();
+        manifest.update_parts = parts
+            .iter()
+            .map(|path| crate::manifest::UpdatePart {
+                url: path.display().to_string(),
+                sha256: crate::manifest::sha256(path).unwrap(),
+                size: i64::try_from(path.metadata().unwrap().len()).unwrap(),
+            })
+            .collect();
+        manifest
+    }
+
+    #[test]
+    fn multipart_download_reassembles_the_exact_verified_package() {
+        let root = TempDir::new().unwrap();
+        let install = root.path().join("install");
+        fs::create_dir_all(&install).unwrap();
+        let package = root.path().join("source.zip");
+        write_zip(&package, &[("mods/example.jar", b"multipart")]);
+        let bytes = fs::read(&package).unwrap();
+        let midpoint = bytes.len() / 2;
+        let parts = [root.path().join("part001"), root.path().join("part002")];
+        fs::write(&parts[0], &bytes[..midpoint]).unwrap();
+        fs::write(&parts[1], &bytes[midpoint..]).unwrap();
+        let manifest = multipart_manifest(&package, &parts);
+        let stage = root.path().join("stage");
+        fs::create_dir_all(&stage).unwrap();
+
+        let source = prepare_package(&profile(&install, &package), &manifest, &stage).unwrap();
+        assert_eq!(source, "2 verified release parts");
+        assert_eq!(fs::read(stage.join("update.zip")).unwrap(), bytes);
+    }
+
+    #[test]
+    fn multipart_download_rejects_a_wrong_combined_package_hash() {
+        let root = TempDir::new().unwrap();
+        let install = root.path().join("install");
+        fs::create_dir_all(&install).unwrap();
+        let package = root.path().join("source.zip");
+        write_zip(&package, &[("mods/example.jar", b"multipart")]);
+        let bytes = fs::read(&package).unwrap();
+        let midpoint = bytes.len() / 2;
+        let parts = [root.path().join("part001"), root.path().join("part002")];
+        fs::write(&parts[0], &bytes[..midpoint]).unwrap();
+        fs::write(&parts[1], &bytes[midpoint..]).unwrap();
+        let mut manifest = multipart_manifest(&package, &parts);
+        manifest.update_sha256 = "a".repeat(64);
+        let stage = root.path().join("stage");
+        fs::create_dir_all(&stage).unwrap();
+
+        let error = prepare_package(&profile(&install, &package), &manifest, &stage).unwrap_err();
+        assert!(error.contains("Reassembled update package SHA-256"));
+        assert!(!stage.join("update.zip").exists());
     }
 
     #[test]

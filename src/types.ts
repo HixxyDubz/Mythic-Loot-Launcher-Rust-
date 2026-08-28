@@ -122,6 +122,13 @@ export interface PackageRequest {
   releaseNotes: string;
 }
 
+export interface PackageAssetPreview {
+  fileName: string;
+  path: string;
+  bytes: number;
+  sha256: string;
+}
+
 export interface PackagePreview {
   previewId: string;
   profileId: string;
@@ -137,6 +144,8 @@ export interface PackagePreview {
   totalBytes: number;
   packageBytes: number;
   packageSha256: string;
+  multipart: boolean;
+  assets: PackageAssetPreview[];
   added: number;
   changed: number;
   removed: number;

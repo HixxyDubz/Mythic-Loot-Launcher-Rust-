@@ -36,7 +36,7 @@ npm run package:windows
 
 This produces an installable EXE at `artifacts/windows/Mythic Loot Launcher Setup <version>.exe` and a portable quick-test executable at `artifacts/windows/win-unpacked/Mythic Loot Launcher.exe`. Exact sizes and SHA-256 hashes are written to `artifacts/windows/build-manifest.json`.
 
-For 7 Days to Die, the game directory is the Steam `7 Days To Die` folder and the managed modpack base folder is its `Mods` child. Publishing scans that `Mods` folder, so package and manifest paths remain relative to the location players actually update. The current single-asset Publisher deliberately stops at 2 GiB; the measured live 7DTD source is 2.727 GiB, so multipart publication must be implemented before that pack can be released through this app.
+For 7 Days to Die, the game directory is the Steam `7 Days To Die` folder and the managed modpack base folder is its `Mods` child. Publishing scans that `Mods` folder, so package and manifest paths remain relative to the location players actually update. Packages at or above 2 GiB are emitted as ordered 1 GiB GitHub assets with individual SHA-256 values; the updater verifies every part and the reconstructed ZIP. A read-only acceptance build of the measured 2.727 GiB live source completed successfully without contacting GitHub.
 
 Writable launcher state is stored in Tauri's local application data directory. Set `MYTHIC_LOOT_DATA_DIR` to an explicit folder for portable development or isolated tests.
 

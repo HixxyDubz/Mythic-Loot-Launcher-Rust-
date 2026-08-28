@@ -197,7 +197,7 @@ export function PublisherPanel({ profile, onBack, onNotice }: PublisherPanelProp
             <label className="field"><span>Release date</span><input type="date" value={releaseDate} onChange={(event) => { setReleaseDate(event.target.value); invalidateRelease(); }} /></label>
             <label className="field field-wide"><span>Release notes</span><input value={releaseNotes} maxLength={20000} onChange={(event) => { setReleaseNotes(event.target.value); invalidateRelease(); }} /></label>
           </div>
-          <div className="safety-note publisher-safety"><FileCheck2 size={15} /> Excludes saves, logs, screenshots, caches and known per-user Minecraft files. Credential-shaped files or content stop the build for review.</div>
+          <div className="safety-note publisher-safety"><FileCheck2 size={15} /> Excludes saves, logs, screenshots, caches, upstream README/changelog documents and known per-user Minecraft files. Credential-shaped runtime content stops the build. Packages at or above 2 GiB are split into ordered, hash-verified 1 GiB release parts.</div>
           <button className="primary-action publisher-preview" onClick={() => void prepareRelease()} disabled={!canPrepareRelease}>
             {busy ? <RefreshCw className="spin" size={17} /> : <Archive size={17} />} Prepare release locally
           </button>
@@ -211,13 +211,25 @@ export function PublisherPanel({ profile, onBack, onNotice }: PublisherPanelProp
               <div><dt>Inventory</dt><dd>{releasePreview.fileCount.toLocaleString()} files · {formatBytes(releasePreview.totalBytes)}</dd></div>
               <div><dt>Excluded runtime entries</dt><dd>{releasePreview.excludedCount.toLocaleString()}</dd></div>
               <div><dt>Changes</dt><dd>{releasePreview.added} added · {releasePreview.changed} changed · {releasePreview.removed} removed</dd></div>
-              {releasePreview.ready && <div><dt>Package</dt><dd>{formatBytes(releasePreview.packageBytes)} · SHA-256 {releasePreview.packageSha256.slice(0, 12)}…</dd></div>}
+              {releasePreview.ready && <div><dt>Package</dt><dd>{releasePreview.multipart ? `Multipart · ${releasePreview.assets.length} parts` : "Single ZIP"} · {formatBytes(releasePreview.packageBytes)} · SHA-256 {releasePreview.packageSha256.slice(0, 12)}…</dd></div>}
               {releasePreview.ready && <div><dt>Local output</dt><dd title={releasePreview.outputDir}>{releasePreview.outputDir}</dd></div>}
             </dl>
+            {releasePreview.ready && (
+              <div className="release-assets" aria-label="Reviewed release assets">
+                <strong>Reviewed GitHub assets</strong>
+                {releasePreview.assets.map((asset, index) => (
+                  <span key={asset.fileName} title={asset.path}>
+                    <b>{index + 1}. {asset.fileName}</b>
+                    <small>{formatBytes(asset.bytes)} · SHA-256 {asset.sha256.slice(0, 12)}…</small>
+                  </span>
+                ))}
+                <span title={releasePreview.manifestPath}><b>{releasePreview.assets.length + 1}. Trusted manifest</b><small>Published after every package asset</small></span>
+              </div>
+            )}
             {releasePreview.issues.length > 0 && <ul className="safety-issues">{releasePreview.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>}
             {releasePreview.ready && (
               <>
-                <label className="confirmation-row"><input type="checkbox" checked={releaseConfirmed} onChange={(event) => setReleaseConfirmed(event.target.checked)} /><span>I confirm publication of immutable GitHub Release {releasePreview.tag} with exactly these reviewed ZIP and manifest assets.</span></label>
+                <label className="confirmation-row"><input type="checkbox" checked={releaseConfirmed} onChange={(event) => setReleaseConfirmed(event.target.checked)} /><span>I confirm publication of immutable GitHub Release {releasePreview.tag} with exactly these {releasePreview.assets.length} reviewed package asset(s) and the trusted manifest.</span></label>
                 {!status?.authenticated && <p className="publish-gate">Run Check GitHub and authenticate before publication. The local preview remains available.</p>}
                 <button className="primary-action danger-action" onClick={() => void publishRelease()} disabled={!releaseConfirmed || !status?.authenticated || busy}>
                   {busy ? <RefreshCw className="spin" size={17} /> : <CloudUpload size={17} />} Publish GitHub release
