@@ -222,4 +222,27 @@ mod tests {
         assert!(!rewritten.contains("serverIp"));
         assert!(!rewritten.contains("serverPort"));
     }
+
+    #[test]
+    fn existing_schema_two_profiles_gain_an_empty_minecraft_launcher() {
+        let root = tempfile::tempdir().expect("temporary directory");
+        let config = LauncherConfig::default();
+        let mut json = serde_json::to_value(&config).unwrap();
+        for profile in json["profiles"].as_array_mut().unwrap() {
+            profile.as_object_mut().unwrap().remove("minecraftLauncher");
+        }
+        fs::write(
+            root.path().join(CONFIG_FILE),
+            serde_json::to_vec_pretty(&json).unwrap(),
+        )
+        .unwrap();
+
+        let loaded = load_or_create_at(root.path()).expect("load older schema two config");
+        assert!(
+            loaded
+                .profiles
+                .iter()
+                .all(|profile| profile.minecraft_launcher.is_empty())
+        );
+    }
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Check, GitBranch, HardDrive, PackageOpen, Radar, Save, X } from "lucide-react";
+import { ArrowLeft, Check, GitBranch, HardDrive, PackageOpen, Radar, RefreshCw, Save, X } from "lucide-react";
 import type { DetectedInstall, GameProfile } from "../types";
 
 interface SettingsPanelProps {
@@ -61,9 +61,19 @@ export function SettingsPanel({
         <section className="settings-section panel-card">
           <div className="section-title">
             <HardDrive />
-            <div><h2>Game and modpack</h2><p>Detected paths stay local to this computer.</p></div>
+            <div><h2>{draft.game === "minecraft" ? "Launcher sync target" : "Game and modpack"}</h2><p>Detected paths stay local to this computer.</p></div>
             <button className="detect-button" onClick={() => onDetect(draft)} disabled={busy}><Radar size={16} /> Detect installs</button>
           </div>
+          {draft.game === "minecraft" && (
+            <div className="minecraft-sync-note">
+              <RefreshCw size={17} />
+              <div>
+                <strong>CurseForge and Modrinth are supported sync targets</strong>
+                <p>Create or import a Minecraft {draft.requiredGameVersion || "1.21.1"} NeoForge profile in your chosen launcher, run detection, then select that profile below. Update &amp; Repair syncs only trusted manifest files and leaves saves, logs, screenshots, options and launcher account data alone.</p>
+                <small>{draft.minecraftLauncher ? `Selected launcher: ${launcherLabel(draft.minecraftLauncher)}` : "No launcher profile selected yet."}</small>
+              </div>
+            </div>
+          )}
           <div className="form-stack">
             <Field label="Game or launcher executable" value={draft.gameExePath} placeholder="C:\Path\To\Game.exe" onChange={(value) => update("gameExePath", value)} />
             <Field label="Game directory" value={draft.gameDir} placeholder="Optional separate game data directory" onChange={(value) => update("gameDir", value)} />
@@ -81,6 +91,7 @@ export function SettingsPanel({
               {candidates.map((candidate) => {
                 const modpackDir = detectedModpackBase(candidate.installDir, draft.deploymentSubdir);
                 const selected = pathsEqual(draft.installDir, modpackDir) && (!candidate.exePath || pathsEqual(draft.gameExePath, candidate.exePath));
+                const syncTarget = draft.game === "minecraft" && isMinecraftSyncTarget(candidate.source);
                 return (
                   <button
                     key={`${candidate.source}-${candidate.installDir}`}
@@ -90,13 +101,14 @@ export function SettingsPanel({
                       installDir: modpackDir,
                       gameDir: candidate.installDir,
                       gameExePath: candidate.exePath ?? current.gameExePath,
+                      minecraftLauncher: current.game === "minecraft" && syncTarget ? candidate.source : "",
                     }))}
                   >
                     <span>
                       <strong>{candidate.label}</strong>
                       <small>{draft.deploymentSubdir ? `${candidate.installDir} · manages ${modpackDir}` : candidate.installDir}</small>
                     </span>
-                    {selected ? <Check size={17} /> : <span className="use-label">Use</span>}
+                    {selected ? <Check size={17} /> : <span className="use-label">{syncTarget ? "Use as sync target" : "Use"}</span>}
                   </button>
                 );
               })}
@@ -122,6 +134,14 @@ export function detectedModpackBase(gameDir: string, deploymentSubdir: string): 
   if (!root || !subdir) return root;
   const separator = root.includes("\\") ? "\\" : "/";
   return `${root}${separator}${subdir}`;
+}
+
+export function isMinecraftSyncTarget(source: string): boolean {
+  return source === "curseforge" || source === "modrinth";
+}
+
+function launcherLabel(value: string): string {
+  return value === "curseforge" ? "CurseForge" : value === "modrinth" ? "Modrinth" : value;
 }
 
 function pathsEqual(left: string, right: string): boolean {

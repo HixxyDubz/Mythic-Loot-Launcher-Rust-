@@ -1048,6 +1048,7 @@ mod tests {
             game_dir: String::new(),
             game_exe_path: String::new(),
             launch_args: String::new(),
+            minecraft_launcher: String::new(),
             discord_invite: String::new(),
             update_source: String::new(),
             manifest_url: String::new(),

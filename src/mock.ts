@@ -13,6 +13,7 @@ export const previewProfiles: GameProfile[] = [
     gameDir: "",
     gameExePath: "",
     launchArgs: "",
+    minecraftLauncher: "",
     discordInvite: "",
     updateSource:
       "https://github.com/HixxyDubz/Mythic-Loot-Minecraft-Modpack/releases/download/v1.0.1/minecraft_main_1.0.1.zip",
@@ -33,6 +34,7 @@ export const previewProfiles: GameProfile[] = [
     gameDir: "",
     gameExePath: "",
     launchArgs: "",
+    minecraftLauncher: "",
     discordInvite: "",
     updateSource: "",
     manifestUrl:

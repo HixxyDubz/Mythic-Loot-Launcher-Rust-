@@ -68,11 +68,10 @@ fn detect_minecraft() -> Vec<DetectedInstall> {
             .as_ref()
             .map(|path| path.join("Overwolf/OverwolfLauncher.exe")),
     ]);
-    if let Some(instances) = home
-        .as_ref()
-        .map(|path| path.join("curseforge/minecraft/Instances"))
-        && instances.is_dir()
-    {
+    for instances in minecraft_curseforge_roots(home.as_deref(), local.as_deref()) {
+        if !instances.is_dir() {
+            continue;
+        }
         add_child_directories(
             &mut found,
             &instances,
@@ -85,17 +84,28 @@ fn detect_minecraft() -> Vec<DetectedInstall> {
     let modrinth_exe = first_file([
         local
             .as_ref()
+            .map(|path| path.join("Modrinth App/theseus_gui.exe")),
+        local
+            .as_ref()
             .map(|path| path.join("Programs/Modrinth App/Modrinth App.exe")),
         local
             .as_ref()
-            .map(|path| path.join("Programs/Modrinth App/modrinth-app.exe")),
+            .map(|path| path.join("Programs/Modrinth App/theseus_gui.exe")),
+        env_path("ProgramFiles")
+            .as_ref()
+            .map(|path| path.join("Modrinth App/Modrinth App.exe")),
     ]);
-    if let Some(profiles) = appdata
-        .as_ref()
-        .map(|path| path.join("ModrinthApp/profiles"))
-        && profiles.is_dir()
-    {
-        add_child_directories(&mut found, &profiles, "Modrinth", modrinth_exe, "modrinth");
+    for profiles in minecraft_modrinth_roots(appdata.as_deref()) {
+        if !profiles.is_dir() {
+            continue;
+        }
+        add_child_directories(
+            &mut found,
+            &profiles,
+            "Modrinth",
+            modrinth_exe.clone(),
+            "modrinth",
+        );
     }
 
     let prism_exe = first_file([
@@ -114,6 +124,27 @@ fn detect_minecraft() -> Vec<DetectedInstall> {
         add_child_directories(&mut found, &instances, "Prism", prism_exe, "prism");
     }
     found
+}
+
+fn minecraft_curseforge_roots(home: Option<&Path>, local: Option<&Path>) -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+    if let Some(home) = home {
+        roots.push(home.join("curseforge/minecraft/Instances"));
+    }
+    if let Some(local) = local {
+        roots.push(local.join("CurseForge/Minecraft/Instances"));
+    }
+    roots
+}
+
+fn minecraft_modrinth_roots(appdata: Option<&Path>) -> Vec<PathBuf> {
+    let Some(appdata) = appdata else {
+        return Vec::new();
+    };
+    vec![
+        appdata.join("com.modrinth.theseus/profiles"),
+        appdata.join("ModrinthApp/profiles"),
+    ]
 }
 
 fn add_child_directories(
@@ -297,5 +328,25 @@ mod tests {
         let paths = parse_steam_library_paths(fixture);
         assert_eq!(paths.len(), 2);
         assert!(paths[1].to_string_lossy().contains("SteamLibrary"));
+    }
+
+    #[test]
+    fn includes_current_and_legacy_modrinth_profile_roots() {
+        let appdata = Path::new(r"C:\Users\Player\AppData\Roaming");
+        let roots = minecraft_modrinth_roots(Some(appdata));
+        assert_eq!(roots.len(), 2);
+        assert!(roots[0].ends_with("com.modrinth.theseus/profiles"));
+        assert!(roots[1].ends_with("ModrinthApp/profiles"));
+    }
+
+    #[test]
+    fn includes_supported_curseforge_instance_roots() {
+        let roots = minecraft_curseforge_roots(
+            Some(Path::new(r"C:\Users\Player")),
+            Some(Path::new(r"C:\Users\Player\AppData\Local")),
+        );
+        assert_eq!(roots.len(), 2);
+        assert!(roots[0].ends_with("curseforge/minecraft/Instances"));
+        assert!(roots[1].ends_with("CurseForge/Minecraft/Instances"));
     }
 }

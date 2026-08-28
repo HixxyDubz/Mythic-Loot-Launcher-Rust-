@@ -46,7 +46,7 @@ React does not receive arbitrary shell or filesystem access. Native operations a
 
 The native store resolves through Tauri's application data directory. `MYTHIC_LOOT_DATA_DIR` overrides it only when explicitly set, which supports portable development and isolated acceptance runs. Invalid JSON is renamed to a timestamped `launcher-config.corrupt-*.json` before a fresh default is created.
 
-Detected game roots and managed modpack roots are distinct. For 7 Days to Die, detection records the Steam game folder for launching and its `Mods` child as the installation/publishing root because generated manifest paths are relative to `Mods`. Minecraft currently has no deployment subdirectory and therefore uses its detected instance root directly.
+Detected game roots and managed modpack roots are distinct. For 7 Days to Die, detection records the Steam game folder for launching and its `Mods` child as the installation/publishing root because generated manifest paths are relative to `Mods`. Minecraft uses a selected CurseForge or Modrinth instance root directly. The launcher records that launcher choice and routes its existing staged update/repair transaction into the selected instance; it does not copy an owner's live profile directly to another player. Saves, logs, screenshots, options, caches and launcher/account metadata are outside the trusted release inventory and remain untouched. Current and legacy Modrinth profile roots are detected, but first-time launcher-native profile creation/import remains a separate acceptance slice.
 
 ## Transaction boundary
 

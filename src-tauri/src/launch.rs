@@ -7,9 +7,14 @@ use crate::models::{GameProfile, LaunchOutcome};
 
 pub fn launch(profile: &GameProfile) -> Result<LaunchOutcome, String> {
     let child = spawn(profile)?;
+    let message = match profile.minecraft_launcher.as_str() {
+        "curseforge" => format!("Opened CurseForge for {}", profile.display_name),
+        "modrinth" => format!("Opened Modrinth for {}", profile.display_name),
+        _ => format!("Started {}", profile.display_name),
+    };
     Ok(LaunchOutcome {
         pid: child.id(),
-        message: format!("Started {}", profile.display_name),
+        message,
     })
 }
 

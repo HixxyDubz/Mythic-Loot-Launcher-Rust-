@@ -19,6 +19,7 @@ export interface GameProfile {
   gameDir: string;
   gameExePath: string;
   launchArgs: string;
+  minecraftLauncher: string;
   discordInvite: string;
   updateSource: string;
   manifestUrl: string;

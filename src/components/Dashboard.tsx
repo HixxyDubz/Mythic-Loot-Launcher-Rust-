@@ -47,6 +47,12 @@ export function Dashboard({ profile, health, manifest, verification, busy, onOpe
   const verificationValue = verification
     ? `${verification.current}/${verification.checked} current`
     : `${manifest.requiredFileCount.toLocaleString()} tracked`;
+  const minecraftLauncher = profile.game === "minecraft" ? profile.minecraftLauncher : "";
+  const playLabel = minecraftLauncher === "curseforge"
+    ? "Open CurseForge"
+    : minecraftLauncher === "modrinth"
+      ? "Open Modrinth"
+      : "Play now";
 
   return (
     <main className="dashboard">
@@ -87,7 +93,7 @@ export function Dashboard({ profile, health, manifest, verification, busy, onOpe
               <div className="hero-actions">
                 <button className="primary-action" onClick={ready ? onPlay : onOpenSettings} disabled={busy}>
                   {busy ? <RefreshCw className="spin" size={18} /> : ready ? <Gamepad2 size={19} /> : <Settings2 size={19} />}
-                  {busy ? "Working…" : ready ? "Play now" : "Complete setup"}
+                  {busy ? "Working…" : ready ? playLabel : "Complete setup"}
                   <ArrowRight size={18} />
                 </button>
                 <button className="secondary-action" onClick={onOpenSettings}>
@@ -160,7 +166,7 @@ export function Dashboard({ profile, health, manifest, verification, busy, onOpe
             </div>
             <div className="quick-actions">
               <button onClick={onOpenUpdates} disabled={busy || !profile.installDir || !manifest.valid}>
-                <Download /> Update & repair <small>Staged native transaction</small>
+                <Download /> {profile.game === "minecraft" ? "Sync, update & repair" : "Update & repair"} <small>Staged native transaction</small>
               </button>
               <button onClick={onVerifyFiles} disabled={busy || !profile.installDir || !manifest.valid || manifest.requiredFileCount === 0}>
                 <ShieldCheck /> Verify files <small>SHA-256 manifest check</small>

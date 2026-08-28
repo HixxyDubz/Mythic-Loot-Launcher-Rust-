@@ -1,13 +1,45 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import App from "./App";
-import { detectedModpackBase, SettingsPanel } from "./components/SettingsPanel";
+import { detectedModpackBase, isMinecraftSyncTarget, SettingsPanel } from "./components/SettingsPanel";
 import { previewProfiles } from "./mock";
 
 describe("Mythic Loot launcher shell", () => {
   it("keeps a detected game root separate from its managed modpack subfolder", () => {
     expect(detectedModpackBase("C:\\Games\\7 Days To Die", "Mods")).toBe("C:\\Games\\7 Days To Die\\Mods");
     expect(detectedModpackBase("C:\\Games\\Minecraft", "")).toBe("C:\\Games\\Minecraft");
+    expect(isMinecraftSyncTarget("curseforge")).toBe(true);
+    expect(isMinecraftSyncTarget("modrinth")).toBe(true);
+    expect(isMinecraftSyncTarget("official")).toBe(false);
+  });
+
+  it("records a detected CurseForge profile as the Minecraft sync target", () => {
+    const onSave = vi.fn();
+    render(
+      <SettingsPanel
+        profile={previewProfiles[0]}
+        dataDir="Browser preview"
+        busy={false}
+        candidates={[{
+          label: "CurseForge · Minecraft Very Vanilla",
+          exePath: "C:\\Launchers\\CurseForge.exe",
+          installDir: "C:\\Users\\Player\\curseforge\\minecraft\\Instances\\Minecraft Very Vanilla",
+          source: "curseforge",
+        }]}
+        onBack={() => undefined}
+        onDetect={() => undefined}
+        onSave={onSave}
+      />,
+    );
+
+    expect(screen.getByText(/CurseForge and Modrinth are supported sync targets/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /CurseForge · Minecraft Very Vanilla/ }));
+    expect(screen.getByText("Selected launcher: CurseForge")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /save settings/i }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      minecraftLauncher: "curseforge",
+      installDir: "C:\\Users\\Player\\curseforge\\minecraft\\Instances\\Minecraft Very Vanilla",
+    }));
   });
 
   it("applies the 7DTD Mods child when a detected Steam install is selected", () => {

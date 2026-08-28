@@ -1,6 +1,6 @@
 # Tauri rewrite parity status
 
-Last updated: 2026-08-27
+Last updated: 2026-08-28
 
 The Python launcher remains the behavior reference. This file records the new Rust/Tauri implementation only.
 
@@ -10,7 +10,7 @@ The Python launcher remains the behavior reference. This file records the new Ru
 | React/TypeScript interface | Verified local foundation | Responsive dashboard, Settings, Publisher, Update & Repair and Safe Launch routes visually checked at 1180x760 and the 940x640 minimum. The checked workspaces have no horizontal overflow at either size. Vitest interaction and production build pass. |
 | Rust configuration store | Verified local | Schema 2 contains server-free modpack profiles. Schema 1 migrates atomically while preserving user paths and converts the two old default names. Tests cover defaults, migration, round-trip persistence and corrupt-file preservation. |
 | Built-in catalogue | Foundation | All twelve MLLP game IDs and custom fallback metadata are represented. Full adapter behavior is not ported. |
-| Minecraft detection | Foundation | Common CurseForge, official and launcher locations are scanned. Full 85-install parity and metadata selection are not yet proven. |
+| Minecraft launcher sync | Verified local foundation / launcher acceptance pending | Existing CurseForge and Modrinth instances are explicit sync targets. Detection includes the current `com.modrinth.theseus` and legacy Modrinth profile roots plus common CurseForge roots; selecting a target persists the launcher kind and routes trusted-manifest Update & Repair into that instance while leaving untracked saves, logs, screenshots, options and launcher/account metadata untouched. Automated launcher-native profile creation/import and real CurseForge/Modrinth acceptance remain. |
 | 7DTD/Steam detection | Verified local foundation | Default and VDF-listed Steam libraries are scanned. Selecting a detected game keeps the Steam root as `gameDir` and derives its `Mods` child as the managed installation/publishing root. Pure path and Settings interaction regressions pass. Real clean-machine detection remains pending. |
 | Trusted manifest contract | Verified local | The actual Minecraft v1.0.1 inventory (2,067 required files and two obsolete paths) and 7DTD v1.0.0 manifest are compile-time bundled. Version 1 validation rejects unsafe paths, Windows aliases/ADS, invalid hashes, case collisions, obsolete overlap and unsupported URLs. Legacy server metadata is ignored. |
 | Required-file verification | Verified local | Rust streams SHA-256 comparisons after safe path resolution and reports current, missing, changed and unsafe entries without modifying the install. Dashboard action is enabled after a pack directory is configured. |
@@ -30,15 +30,15 @@ The Python launcher remains the behavior reference. This file records the new Ru
 
 ## Verification snapshot
 
-- `cargo test --manifest-path src-tauri/Cargo.toml`: 46 passed and one explicit live-source acceptance harness ignored by default, including schema/config recovery, bundled manifests, adversarial paths, streaming hashes, deterministic single/multipart publishing, privacy scanning, cached-asset revalidation, multipart reconstruction rejection, fail-closed GitHub actions, update rollback, restore staging and Safe Launch recovery guards.
-- `npm run test`: 6 passed.
+- `cargo test --manifest-path src-tauri/Cargo.toml`: 49 passed and one explicit live-source acceptance harness ignored by default, including current/legacy Minecraft launcher roots, backward-compatible sync-target persistence, schema/config recovery, bundled manifests, adversarial paths, streaming hashes, deterministic single/multipart publishing, privacy scanning, cached-asset revalidation, multipart reconstruction rejection, fail-closed GitHub actions, update rollback, restore staging and Safe Launch recovery guards.
+- `npm run test`: 7 passed.
 - `npm run build`: TypeScript and Vite production build passed; 1,831 modules transformed.
 - `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings`: passed.
 - `npm run package:windows`: NSIS installer and portable win-unpacked executable built and copied into the ignored `artifacts/windows` handoff folder with a SHA-256 manifest.
 - Browser visual check: the Update & Repair, Recovery history and Safe Launch workspaces passed at 1180x760 and 940x640 without horizontal overflow. Safe Launch truthfully showed that the bundled manifest has no optional extras, omitted the unavailable Start action, remained readable and logged no browser warnings or errors.
-- Packaged handoff: installer is 5,098,656 bytes with SHA-256 `D646DDC4221921C1BBDB0167AE555C21F0B51A3BC1294B906B443DC4FA9DF610`; win-unpacked executable is 16,713,216 bytes with SHA-256 `1052ED63640187B3078796A5FB94148783F664DAFD5AD9F5B5D99987DD87C5BC`. The portable executable was responsive after four seconds with a 30.3 MB working set under isolated schema-2 data with two profiles and no server keys; temporary data was removed afterward. The installer was built but not installed during this checkpoint.
+- Packaged handoff: installer is 5,099,540 bytes with SHA-256 `A94EDB7F0E897F1A149A7BF0EC6E305A82069177927ED6FBAAF46B9FB0C1A2A9`; win-unpacked executable is 16,719,872 bytes with SHA-256 `E761A14E0F1E94059B852501370D1A6E3E22256525C0F2064BAE75C6935EFE2A`. The portable executable was responsive after four seconds with a 41.7 MB working set under isolated schema-2 data with two profiles, an empty backward-compatible Minecraft launcher field and no server keys; temporary data was removed afterward. The installer was built but not installed during this checkpoint.
 - Live 7DTD acceptance was read-only: `C:\Program Files (x86)\Steam\steamapps\common\7 Days To Die\Mods` contains 186 top-level folders and 4,107 files totalling 2,927,899,865 bytes (2.727 GiB), with no reparse points. The first scan correctly stopped on contact/example-path data in two upstream documentation files; the documented exclusion policy then retained runtime files and a complete local multipart build plus manifest validation passed in 538.45 seconds. No GitHub call occurred and disposable output was removed.
 
 ## External acceptance boundary
 
-Server acceptance is not a launcher gate because servers are managed elsewhere. A full real-package GitHub update/repair, real large-installation restore, authenticated GitHub repository creation/release publication of the locally verified multipart assets, separate Player/Developer artifacts, a real-game Safe Launch using a trusted manifest with optional files, and friend-machine modpack acceptance are not part of this checkpoint.
+Server acceptance is not a launcher gate because servers are managed elsewhere. A full real-package GitHub update/repair, real large-installation restore, authenticated GitHub repository creation/release publication of the locally verified multipart assets, launcher-native creation/import of new CurseForge and Modrinth profiles, separate Player/Developer artifacts, a real-game Safe Launch using a trusted manifest with optional files, and friend-machine modpack acceptance are not part of this checkpoint.
