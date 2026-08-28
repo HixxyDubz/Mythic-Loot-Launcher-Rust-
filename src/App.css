@@ -296,6 +296,16 @@ h1, h2, h3, p { margin-top: 0; }
 .minecraft-sync-note strong { display: block; color: #c7b9d4; font-size: 10px; }
 .minecraft-sync-note p { margin: 4px 0 6px; color: #867890; font-size: 9px; line-height: 1.55; }
 .minecraft-sync-note small { color: #58b6d0; font-size: 8px; font-weight: 700; }
+.bootstrap-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+.bootstrap-actions button, .bootstrap-result button { min-height: 30px; padding: 0 10px; border: 1px solid rgba(88,220,255,.18); border-radius: 7px; background: rgba(88,220,255,.05); color: #91d9ec; font-size: 8px; font-weight: 700; cursor: pointer; }
+.bootstrap-actions button:hover, .bootstrap-result button:hover { border-color: rgba(88,220,255,.36); background: rgba(88,220,255,.09); }
+.bootstrap-actions button:disabled { opacity: .5; cursor: wait; }
+.bootstrap-result { margin-top: 10px; padding: 10px; border: 1px solid rgba(158,99,255,.16); border-radius: 8px; background: rgba(158,99,255,.035); }
+.bootstrap-result > strong, .bootstrap-result > span { display: block; overflow-wrap: anywhere; }
+.bootstrap-result > strong { color: #cbb8de; font-size: 9px; }
+.bootstrap-result > span { margin-top: 3px; color: #756985; font-family: Consolas, monospace; font-size: 7px; }
+.bootstrap-result p { margin: 7px 0 9px; }
+.bootstrap-result > div { display: flex; flex-wrap: wrap; gap: 7px; }
 .native-data-card { padding-bottom: 16px; }
 .native-data-card .section-title { margin-bottom: 11px; }
 .safety-note { display: flex; align-items: center; gap: 7px; padding: 9px 11px; border-radius: 8px; background: rgba(85,217,148,.045); color: #7f9d91; font-size: 8px; }

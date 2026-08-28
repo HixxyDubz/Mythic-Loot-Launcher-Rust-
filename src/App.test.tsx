@@ -13,8 +13,16 @@ describe("Mythic Loot launcher shell", () => {
     expect(isMinecraftSyncTarget("official")).toBe(false);
   });
 
-  it("records a detected CurseForge profile as the Minecraft sync target", () => {
+  it("records a detected CurseForge profile as the Minecraft sync target", async () => {
     const onSave = vi.fn();
+    const onPrepare = vi.fn(async () => ({
+      launcher: "curseforge" as const,
+      fileName: "Mythic Loot Minecraft-curseforge-bootstrap.zip",
+      path: "C:\\Bootstrap\\Mythic Loot Minecraft-curseforge-bootstrap.zip",
+      bytes: 512,
+      sha256: "a".repeat(64),
+      message: "Bootstrap ZIP ready.",
+    }));
     render(
       <SettingsPanel
         profile={previewProfiles[0]}
@@ -29,6 +37,8 @@ describe("Mythic Loot launcher shell", () => {
         onBack={() => undefined}
         onDetect={() => undefined}
         onSave={onSave}
+        onPrepareMinecraftBootstrap={onPrepare}
+        onNotice={() => undefined}
       />,
     );
 
@@ -40,6 +50,10 @@ describe("Mythic Loot launcher shell", () => {
       minecraftLauncher: "curseforge",
       installDir: "C:\\Users\\Player\\curseforge\\minecraft\\Instances\\Minecraft Very Vanilla",
     }));
+    fireEvent.click(screen.getByRole("button", { name: /prepare curseforge import/i }));
+    await screen.findByText("Mythic Loot Minecraft-curseforge-bootstrap.zip");
+    expect(onPrepare).toHaveBeenCalledWith({ profileId: "minecraft_main", launcher: "curseforge" });
+    expect(screen.getByText(/In CurseForge choose Import/i)).toBeInTheDocument();
   });
 
   it("applies the 7DTD Mods child when a detected Steam install is selected", () => {
@@ -58,6 +72,8 @@ describe("Mythic Loot launcher shell", () => {
         onBack={() => undefined}
         onDetect={() => undefined}
         onSave={onSave}
+        onPrepareMinecraftBootstrap={async () => { throw new Error("not used"); }}
+        onNotice={() => undefined}
       />,
     );
 

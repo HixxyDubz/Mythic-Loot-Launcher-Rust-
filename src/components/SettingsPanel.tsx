@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, Check, GitBranch, HardDrive, PackageOpen, Radar, RefreshCw, Save, X } from "lucide-react";
-import type { DetectedInstall, GameProfile } from "../types";
+import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
+import type { DetectedInstall, GameProfile, MinecraftBootstrapArtifact, MinecraftBootstrapRequest, MinecraftLauncher } from "../types";
 
 interface SettingsPanelProps {
   profile: GameProfile;
@@ -10,6 +11,8 @@ interface SettingsPanelProps {
   onBack: () => void;
   onDetect: (profile: GameProfile) => void;
   onSave: (profile: GameProfile) => void;
+  onPrepareMinecraftBootstrap: (request: MinecraftBootstrapRequest) => Promise<MinecraftBootstrapArtifact>;
+  onNotice: (message: string) => void;
 }
 
 export function SettingsPanel({
@@ -20,12 +23,48 @@ export function SettingsPanel({
   onBack,
   onDetect,
   onSave,
+  onPrepareMinecraftBootstrap,
+  onNotice,
 }: SettingsPanelProps) {
   const [draft, setDraft] = useState(profile);
-  useEffect(() => setDraft(profile), [profile]);
+  const [bootstrapArtifact, setBootstrapArtifact] = useState<MinecraftBootstrapArtifact | null>(null);
+  const [preparingLauncher, setPreparingLauncher] = useState<MinecraftLauncher | null>(null);
+  useEffect(() => {
+    setDraft(profile);
+    setBootstrapArtifact(null);
+  }, [profile]);
 
   const update = <K extends keyof GameProfile>(key: K, value: GameProfile[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
+
+  async function prepareBootstrap(launcher: MinecraftLauncher) {
+    setPreparingLauncher(launcher);
+    try {
+      const artifact = await onPrepareMinecraftBootstrap({ profileId: draft.id, launcher });
+      setBootstrapArtifact(artifact);
+      onNotice(artifact.message);
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPreparingLauncher(null);
+    }
+  }
+
+  async function openBootstrap(artifact: MinecraftBootstrapArtifact) {
+    try {
+      await openPath(artifact.path);
+    } catch (error) {
+      onNotice(`The import file could not be opened automatically: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  async function revealBootstrap(artifact: MinecraftBootstrapArtifact) {
+    try {
+      await revealItemInDir(artifact.path);
+    } catch (error) {
+      onNotice(`The import file could not be shown in Explorer: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
 
   return (
     <main className="settings-page">
@@ -71,6 +110,25 @@ export function SettingsPanel({
                 <strong>CurseForge and Modrinth are supported sync targets</strong>
                 <p>Create or import a Minecraft {draft.requiredGameVersion || "1.21.1"} NeoForge profile in your chosen launcher, run detection, then select that profile below. Update &amp; Repair syncs only trusted manifest files and leaves saves, logs, screenshots, options and launcher account data alone.</p>
                 <small>{draft.minecraftLauncher ? `Selected launcher: ${launcherLabel(draft.minecraftLauncher)}` : "No launcher profile selected yet."}</small>
+                <div className="bootstrap-actions">
+                  <button onClick={() => void prepareBootstrap("curseforge")} disabled={Boolean(preparingLauncher)}>
+                    {preparingLauncher === "curseforge" ? "Preparing…" : "Prepare CurseForge import"}
+                  </button>
+                  <button onClick={() => void prepareBootstrap("modrinth")} disabled={Boolean(preparingLauncher)}>
+                    {preparingLauncher === "modrinth" ? "Preparing…" : "Prepare Modrinth import"}
+                  </button>
+                </div>
+                {bootstrapArtifact && (
+                  <div className="bootstrap-result">
+                    <strong>{bootstrapArtifact.fileName}</strong>
+                    <span>{formatBytes(bootstrapArtifact.bytes)} · SHA-256 {bootstrapArtifact.sha256}</span>
+                    <p>{bootstrapArtifact.launcher === "curseforge" ? "In CurseForge choose Import, then select this ZIP." : "Open this .mrpack with Modrinth to create the empty managed profile."} After import, detect the profile here and run Sync, update &amp; repair.</p>
+                    <div>
+                      <button onClick={() => void openBootstrap(bootstrapArtifact)}>Open import file</button>
+                      <button onClick={() => void revealBootstrap(bootstrapArtifact)}>Show in Explorer</button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -142,6 +200,11 @@ export function isMinecraftSyncTarget(source: string): boolean {
 
 function launcherLabel(value: string): string {
   return value === "curseforge" ? "CurseForge" : value === "modrinth" ? "Modrinth" : value;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  return `${(bytes / 1024).toFixed(1)} KiB`;
 }
 
 function pathsEqual(left: string, right: string): boolean {

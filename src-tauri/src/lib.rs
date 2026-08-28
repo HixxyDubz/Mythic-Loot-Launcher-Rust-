@@ -1,6 +1,7 @@
 mod detection;
 mod launch;
 mod manifest;
+mod minecraft_setup;
 mod models;
 mod packager;
 mod publisher;
@@ -12,6 +13,7 @@ mod storage;
 mod updater;
 
 use manifest::FileVerification;
+use minecraft_setup::{MinecraftBootstrapArtifact, MinecraftBootstrapRequest};
 use models::{BootstrapPayload, DetectedInstall, GameProfile, LaunchOutcome, ReadinessStatus};
 use packager::{PackagePreview, PackageRequest, ReleasePublication};
 use publisher::{PublisherStatus, RepositoryCreation, RepositoryRequest};
@@ -89,6 +91,16 @@ fn save_profile(app: AppHandle, profile: GameProfile) -> Result<BootstrapPayload
 #[tauri::command]
 fn detect_installations(profile: GameProfile) -> Vec<DetectedInstall> {
     detection::detect(&profile)
+}
+
+#[tauri::command]
+async fn prepare_minecraft_bootstrap(
+    app: AppHandle,
+    request: MinecraftBootstrapRequest,
+) -> Result<MinecraftBootstrapArtifact, String> {
+    tauri::async_runtime::spawn_blocking(move || minecraft_setup::prepare(&app, &request))
+        .await
+        .map_err(|error| format!("Minecraft bootstrap task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -281,6 +293,7 @@ pub fn run() {
             select_profile,
             save_profile,
             detect_installations,
+            prepare_minecraft_bootstrap,
             github_publisher_status,
             create_github_repository,
             prepare_modpack_release,

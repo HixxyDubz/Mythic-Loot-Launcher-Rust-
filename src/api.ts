@@ -5,6 +5,8 @@ import type {
   FileVerification,
   GameProfile,
   LaunchOutcome,
+  MinecraftBootstrapArtifact,
+  MinecraftBootstrapRequest,
   PackagePreview,
   PackageRequest,
   PublisherStatus,
@@ -47,6 +49,15 @@ export async function detectInstallations(profile: GameProfile): Promise<Detecte
   return runningInTauri
     ? invoke<DetectedInstall[]>("detect_installations", { profile })
     : [];
+}
+
+export async function prepareMinecraftBootstrap(
+  request: MinecraftBootstrapRequest,
+): Promise<MinecraftBootstrapArtifact> {
+  if (!runningInTauri) {
+    throw new Error("Minecraft launcher bootstrap files are only available in the native Tauri app.");
+  }
+  return invoke<MinecraftBootstrapArtifact>("prepare_minecraft_bootstrap", { request });
 }
 
 export async function verifyProfileFiles(profileId: string): Promise<FileVerification> {

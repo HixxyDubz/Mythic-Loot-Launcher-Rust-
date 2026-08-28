@@ -89,6 +89,22 @@ export interface DetectedInstall {
   source: string;
 }
 
+export type MinecraftLauncher = "curseforge" | "modrinth";
+
+export interface MinecraftBootstrapRequest {
+  profileId: string;
+  launcher: MinecraftLauncher;
+}
+
+export interface MinecraftBootstrapArtifact {
+  launcher: MinecraftLauncher;
+  fileName: string;
+  path: string;
+  bytes: number;
+  sha256: string;
+  message: string;
+}
+
 export interface LaunchOutcome {
   pid: number;
   message: string;

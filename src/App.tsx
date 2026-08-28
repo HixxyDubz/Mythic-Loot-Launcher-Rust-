@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
-import { bootstrap, detectInstallations, launchProfile, saveProfile, selectProfile, verifyProfileFiles } from "./api";
+import { bootstrap, detectInstallations, launchProfile, prepareMinecraftBootstrap, saveProfile, selectProfile, verifyProfileFiles } from "./api";
 import { Dashboard } from "./components/Dashboard";
 import { PublisherPanel } from "./components/PublisherPanel";
 import { SafeLaunchPanel } from "./components/SafeLaunchPanel";
@@ -205,6 +205,8 @@ function App() {
                 onBack={() => setPage("dashboard")}
                 onDetect={(profile) => void detect(profile)}
                 onSave={(profile) => void save(profile)}
+                onPrepareMinecraftBootstrap={prepareMinecraftBootstrap}
+                onNotice={setNotice}
               />
             ) : (
               <Dashboard
