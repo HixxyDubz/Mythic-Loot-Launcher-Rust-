@@ -5,12 +5,14 @@ interface SidebarProps {
   profiles: GameProfile[];
   health: ProfileHealth[];
   selectedId: string;
+  edition: "player" | "developer";
+  publisherAvailable: boolean;
   onSelect: (id: string) => void;
   onSettings: () => void;
   onPublisher: () => void;
 }
 
-export function Sidebar({ profiles, health, selectedId, onSelect, onSettings, onPublisher }: SidebarProps) {
+export function Sidebar({ profiles, health, selectedId, edition, publisherAvailable, onSelect, onSettings, onPublisher }: SidebarProps) {
   return (
     <aside className="sidebar">
       <div className="brand-lockup">
@@ -50,13 +52,15 @@ export function Sidebar({ profiles, health, selectedId, onSelect, onSettings, on
         <Plus size={16} /> Add modpack
       </button>
       <div className="sidebar-footer">
-        <button onClick={onPublisher}>
-          <CloudUpload size={17} /> Publisher
-        </button>
+        {publisherAvailable && (
+          <button onClick={onPublisher}>
+            <CloudUpload size={17} /> Publisher
+          </button>
+        )}
         <button onClick={onSettings}>
           <Settings size={17} /> Settings
         </button>
-        <span><Gamepad2 size={15} /> Rust core connected</span>
+        <span><Gamepad2 size={15} /> {edition === "developer" ? "Developer edition" : "Player edition"}</span>
       </div>
     </aside>
   );

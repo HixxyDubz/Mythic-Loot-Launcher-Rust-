@@ -1,0 +1,23 @@
+{
+  "productName": "Mythic Loot Launcher Developer",
+  "identifier": "com.hixxydubz.mythiclootlauncher.developer",
+  "build": {
+    "beforeBuildCommand": "npm run build -- --mode developer"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Mythic Loot Launcher Developer",
+        "width": 1180,
+        "height": 760,
+        "minWidth": 940,
+        "minHeight": 640,
+        "center": true,
+        "decorations": false,
+        "resizable": true,
+        "shadow": true
+      }
+    ]
+  }
+}

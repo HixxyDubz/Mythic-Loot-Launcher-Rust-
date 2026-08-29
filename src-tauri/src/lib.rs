@@ -3,7 +3,9 @@ mod launch;
 mod manifest;
 mod minecraft_setup;
 mod models;
+#[cfg(feature = "developer")]
 mod packager;
+#[cfg(feature = "developer")]
 mod publisher;
 mod readiness;
 mod restore_points;
@@ -15,7 +17,9 @@ mod updater;
 use manifest::FileVerification;
 use minecraft_setup::{MinecraftBootstrapArtifact, MinecraftBootstrapRequest};
 use models::{BootstrapPayload, DetectedInstall, GameProfile, LaunchOutcome, ReadinessStatus};
+#[cfg(feature = "developer")]
 use packager::{PackagePreview, PackageRequest, ReleasePublication};
+#[cfg(feature = "developer")]
 use publisher::{PublisherStatus, RepositoryCreation, RepositoryRequest};
 use restore_points::{RestoreOutcome, RestorePointSummary, RestorePreview};
 use safe_launch::{SafeLaunchOutcome, SafeLaunchRecovery, SafeLaunchStatus};
@@ -104,6 +108,7 @@ async fn prepare_minecraft_bootstrap(
 }
 
 #[tauri::command]
+#[cfg(feature = "developer")]
 async fn github_publisher_status() -> Result<PublisherStatus, String> {
     tauri::async_runtime::spawn_blocking(publisher::status)
         .await
@@ -111,6 +116,7 @@ async fn github_publisher_status() -> Result<PublisherStatus, String> {
 }
 
 #[tauri::command]
+#[cfg(feature = "developer")]
 async fn create_github_repository(
     request: RepositoryRequest,
 ) -> Result<RepositoryCreation, String> {
@@ -120,6 +126,7 @@ async fn create_github_repository(
 }
 
 #[tauri::command]
+#[cfg(feature = "developer")]
 async fn prepare_modpack_release(
     app: AppHandle,
     request: PackageRequest,
@@ -130,6 +137,7 @@ async fn prepare_modpack_release(
 }
 
 #[tauri::command]
+#[cfg(feature = "developer")]
 async fn publish_modpack_release(
     preview_id: String,
     confirmed: bool,
@@ -274,7 +282,7 @@ fn launch_profile(app: AppHandle, profile_id: String) -> Result<LaunchOutcome, S
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let window = app
@@ -287,29 +295,53 @@ pub fn run() {
                 window.is_visible().unwrap_or(false)
             );
             Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![
-            bootstrap,
-            select_profile,
-            save_profile,
-            detect_installations,
-            prepare_minecraft_bootstrap,
-            github_publisher_status,
-            create_github_repository,
-            prepare_modpack_release,
-            publish_modpack_release,
-            prepare_modpack_transaction,
-            apply_modpack_transaction,
-            list_restore_points,
-            prepare_restore_point,
-            apply_restore_point,
-            delete_restore_point,
-            safe_launch_status,
-            start_safe_launch,
-            recover_safe_launch,
-            verify_profile_files,
-            launch_profile
-        ])
+        });
+
+    #[cfg(feature = "developer")]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        bootstrap,
+        select_profile,
+        save_profile,
+        detect_installations,
+        prepare_minecraft_bootstrap,
+        github_publisher_status,
+        create_github_repository,
+        prepare_modpack_release,
+        publish_modpack_release,
+        prepare_modpack_transaction,
+        apply_modpack_transaction,
+        list_restore_points,
+        prepare_restore_point,
+        apply_restore_point,
+        delete_restore_point,
+        safe_launch_status,
+        start_safe_launch,
+        recover_safe_launch,
+        verify_profile_files,
+        launch_profile
+    ]);
+
+    #[cfg(not(feature = "developer"))]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        bootstrap,
+        select_profile,
+        save_profile,
+        detect_installations,
+        prepare_minecraft_bootstrap,
+        prepare_modpack_transaction,
+        apply_modpack_transaction,
+        list_restore_points,
+        prepare_restore_point,
+        apply_restore_point,
+        delete_restore_point,
+        safe_launch_status,
+        start_safe_launch,
+        recover_safe_launch,
+        verify_profile_files,
+        launch_profile
+    ]);
+
+    builder
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

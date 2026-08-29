@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
+import { EditionPublisherPanel, launcherEdition, publisherAvailable } from "@launcher-edition";
 import { applyModpackTransaction, bootstrap, detectInstallations, launchProfile, prepareMinecraftBootstrap, prepareModpackTransaction, saveProfile, selectProfile, verifyProfileFiles } from "./api";
 import { Dashboard } from "./components/Dashboard";
-import { PublisherPanel } from "./components/PublisherPanel";
 import { SafeLaunchPanel } from "./components/SafeLaunchPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { Sidebar } from "./components/Sidebar";
@@ -155,13 +155,15 @@ function App() {
             profiles={payload.config.profiles}
             health={payload.health}
             selectedId={payload.config.selectedProfileId}
+            edition={launcherEdition}
+            publisherAvailable={publisherAvailable}
             onSelect={(id) => void chooseProfile(id)}
             onSettings={() => setPage("settings")}
             onPublisher={() => setPage("publisher")}
           />
           <div className="content-region">
-            {page === "publisher" ? (
-              <PublisherPanel
+            {publisherAvailable && page === "publisher" ? (
+              <EditionPublisherPanel
                 profile={selectedProfile}
                 onBack={() => setPage("dashboard")}
                 onNotice={setNotice}

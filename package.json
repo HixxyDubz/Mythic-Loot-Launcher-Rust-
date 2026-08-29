@@ -6,10 +6,14 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:player": "npm run build -- --mode player",
+    "build:developer": "npm run build -- --mode developer",
     "check": "npm run test && npm run build",
     "test": "vitest run",
     "preview": "vite preview",
-    "package:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Build-WindowsArtifacts.ps1",
+    "package:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Build-WindowsArtifacts.ps1 -Edition All",
+    "package:windows:player": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Build-WindowsArtifacts.ps1 -Edition Player",
+    "package:windows:developer": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Build-WindowsArtifacts.ps1 -Edition Developer",
     "tauri": "tauri"
   },
   "dependencies": {

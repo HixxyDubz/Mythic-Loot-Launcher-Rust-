@@ -1,0 +1,28 @@
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { previewHealth, previewProfiles } from "../mock";
+import { Sidebar } from "../components/Sidebar";
+import { launcherEdition, publisherAvailable } from "./player";
+
+describe("Player edition", () => {
+  it("identifies itself as Player and omits the publishing workspace", () => {
+    expect(launcherEdition).toBe("player");
+    expect(publisherAvailable).toBe(false);
+
+    render(
+      <Sidebar
+        profiles={previewProfiles}
+        health={previewProfiles.map(previewHealth)}
+        selectedId={previewProfiles[0].id}
+        edition="player"
+        publisherAvailable={false}
+        onSelect={vi.fn()}
+        onSettings={vi.fn()}
+        onPublisher={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Player edition")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /publisher/i })).not.toBeInTheDocument();
+  });
+});

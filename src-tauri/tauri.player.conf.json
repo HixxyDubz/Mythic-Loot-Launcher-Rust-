@@ -1,0 +1,23 @@
+{
+  "productName": "Mythic Loot Launcher Player",
+  "identifier": "com.hixxydubz.mythiclootlauncher.player",
+  "build": {
+    "beforeBuildCommand": "npm run build -- --mode player"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Mythic Loot Launcher Player",
+        "width": 1180,
+        "height": 760,
+        "minWidth": 940,
+        "minHeight": 640,
+        "center": true,
+        "decorations": false,
+        "resizable": true,
+        "shadow": true
+      }
+    ]
+  }
+}

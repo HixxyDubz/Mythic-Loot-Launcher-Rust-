@@ -12,7 +12,7 @@ Rust application core
   -> persistent optional-file isolation and crash recovery
   -> manifest verification and transactional update/repair services
   -> metadata-backed restore-point recovery
-  -> local-first publishing services
+  -> local-first publishing services (Developer edition only)
 Windows, filesystem, game launchers and GitHub CLI
 ```
 
@@ -27,8 +27,8 @@ React does not receive arbitrary shell or filesystem access. Native operations a
 - `manifest.rs`: bundled/local manifest loading, schema and path validation, and streaming SHA-256 verification.
 - `minecraft_setup.rs`: deterministic minimal CurseForge ZIP and Modrinth `.mrpack` bootstrap generation from trusted Minecraft/loader metadata; no modpack files or personal state are embedded.
 - `safe_path.rs`: traversal, Windows alias, alternate-stream and archive-member rejection.
-- `publisher.rs`: shell-free GitHub CLI preflight and fail-closed repository creation after explicit confirmation.
-- `packager.rs`: source-folder exclusions/privacy audit, deterministic ZIP and manifest generation, native release-plan caching, asset re-verification and explicitly confirmed immutable GitHub Release publication.
+- `publisher.rs` (Developer feature only): shell-free GitHub CLI preflight and fail-closed repository creation after explicit confirmation.
+- `packager.rs` (Developer feature only): source-folder exclusions/privacy audit, deterministic ZIP and manifest generation, native release-plan caching, asset re-verification and explicitly confirmed immutable GitHub Release publication.
 - `updater.rs`: trusted local/HTTPS and multipart package acquisition, archive validation, isolated changed-file staging, native preview caching, disk-space checks, pre-change ZIP backup, confirmed apply, post-verification and journaled rollback.
 - `restore_points.rs`: hashed backup metadata, five-point retention, safe history listing, isolated restore staging, cached previews, explicit restore/delete confirmations, recovery-of-the-recovery backup, post-restore verification and rollback.
 - `launch.rs`: validated native process start and Windows-aware argument parsing; it never generates server connection arguments.
@@ -39,13 +39,14 @@ React does not receive arbitrary shell or filesystem access. Native operations a
 
 - `api.ts`: typed IPC facade with a browser-only design preview fallback.
 - `App.tsx`: application orchestration and error/notice states.
-- `components/`: title bar, modpack navigation, dashboard, settings, publisher, and staged update/repair workspace.
+- `editions/`: compile-time Player/Developer route selection. The Player module never imports the Publisher workspace.
+- `components/`: title bar, modpack navigation, dashboard, settings, Developer publisher, Smart Launch, Safe Launch and staged update/repair workspaces.
 - `types.ts`: IPC data contract mirrored from Rust.
 - `mock.ts`: explicit browser-preview data; never used as native production persistence.
 
 ## Persistence
 
-The native store resolves through Tauri's application data directory. `MYTHIC_LOOT_DATA_DIR` overrides it only when explicitly set, which supports portable development and isolated acceptance runs. Invalid JSON is renamed to a timestamped `launcher-config.corrupt-*.json` before a fresh default is created.
+The native store resolves through Tauri's application data directory. Player and Developer use distinct application identifiers, so their normal installed state is separate and both editions can coexist. `MYTHIC_LOOT_DATA_DIR` overrides it only when explicitly set, which supports portable development and isolated acceptance runs. Invalid JSON is renamed to a timestamped `launcher-config.corrupt-*.json` before a fresh default is created.
 
 Detected game roots and managed modpack roots are distinct. For 7 Days to Die, detection records the Steam game folder for launching and its `Mods` child as the installation/publishing root because generated manifest paths are relative to `Mods`. Minecraft uses a selected CurseForge or Modrinth instance root directly. The launcher records that launcher choice and routes its existing staged update/repair transaction into the selected instance; it does not copy an owner's live profile directly to another player. Saves, logs, screenshots, options, caches and launcher/account metadata are outside the trusted release inventory and remain untouched. Current and legacy Modrinth profile roots are detected. First-time setup creates deterministic launcher-native bootstrap archives under application data: a CurseForge import ZIP with `manifest.json`, or a Modrinth `.mrpack` with `modrinth.index.json`. Both declare the trusted Minecraft/loader versions and an empty file list so the launcher creates the profile before Mythic Loot performs the verified GitHub sync. Actual import in both third-party launchers remains an external acceptance gate.
 
@@ -57,7 +58,7 @@ Every new backup contains a schema-versioned inventory of relative paths, sizes 
 
 Safe Launch is a separate short-lived transaction. Rust resolves only `optionalFiles` from the trusted manifest, journals every source, disabled destination, size and SHA-256 before mutation, and stores the journal outside the live installation. It starts the configured game as a child, records that exact PID, waits for its exit and restores each unchanged disabled file. If the launcher exits early, a later run refuses recovery while that process is alive and offers explicit recovery afterward. Changed, missing, duplicated or redirected files fail closed and leave the journal for diagnosis.
 
-GitHub publishing is a separate Developer workflow: local preparation scans privacy and produces reviewed artifacts without authentication; repository creation and release publication use authenticated `gh` state and separate explicit confirmations. Packages below 2 GiB remain one deterministic ZIP. Larger packages are split byte-for-byte into ordered 1 GiB assets, with each part and the complete ZIP represented by SHA-256 in the trusted manifest. The updater verifies each download, reconstructs the original ZIP, verifies its complete hash, then enters the existing stage/verify transaction. The native release command accepts only a cached preview identifier, not arbitrary asset paths, and re-hashes every cached part and the manifest at action time. Player builds will only consume reviewed release metadata and must not contain publishing controls.
+GitHub publishing is a separate Developer workflow: local preparation scans privacy and produces reviewed artifacts without authentication; repository creation and release publication use authenticated `gh` state and separate explicit confirmations. Packages below 2 GiB remain one deterministic ZIP. Larger packages are split byte-for-byte into ordered 1 GiB assets, with each part and the complete ZIP represented by SHA-256 in the trusted manifest. The updater verifies each download, reconstructs the original ZIP, verifies its complete hash, then enters the existing stage/verify transaction. The native release command accepts only a cached preview identifier, not arbitrary asset paths, and re-hashes every cached part and the manifest at action time. Player builds compile without the `developer` Cargo feature, so `publisher.rs`, `packager.rs`, their Tauri command registrations, and the frontend Publisher route are absent rather than hidden by a runtime toggle.
 
 Publisher privacy scanning excludes runtime state and non-runtime upstream README, changelog, licence and credits documents. This avoids packaging incidental author contact details or example machine paths while retaining runtime files and continuing to fail closed on credential-shaped runtime content.
 
