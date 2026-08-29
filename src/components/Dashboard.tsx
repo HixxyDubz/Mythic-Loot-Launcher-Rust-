@@ -25,7 +25,7 @@ interface DashboardProps {
   verification?: FileVerification;
   busy: boolean;
   onOpenSettings: () => void;
-  onPlay: () => void;
+  onOpenSmartLaunch: () => void;
   onVerifyFiles: () => void;
   onOpenUpdates: () => void;
   onOpenSafeLaunch: () => void;
@@ -41,19 +41,12 @@ const labels: Record<ReadinessStatus, string> = {
   failed: "CHECK FAILED",
 };
 
-export function Dashboard({ profile, health, manifest, verification, busy, onOpenSettings, onPlay, onVerifyFiles, onOpenUpdates, onOpenSafeLaunch }: DashboardProps) {
+export function Dashboard({ profile, health, manifest, verification, busy, onOpenSettings, onOpenSmartLaunch, onVerifyFiles, onOpenUpdates, onOpenSafeLaunch }: DashboardProps) {
   const [tab, setTab] = useState<DetailTab>("overview");
   const ready = health.status === "ready";
   const verificationValue = verification
     ? `${verification.current}/${verification.checked} current`
     : `${manifest.requiredFileCount.toLocaleString()} tracked`;
-  const minecraftLauncher = profile.game === "minecraft" ? profile.minecraftLauncher : "";
-  const playLabel = minecraftLauncher === "curseforge"
-    ? "Open CurseForge"
-    : minecraftLauncher === "modrinth"
-      ? "Open Modrinth"
-      : "Play now";
-
   return (
     <main className="dashboard">
       <div className="dashboard-topline">
@@ -91,9 +84,9 @@ export function Dashboard({ profile, health, manifest, verification, busy, onOpe
                   : "Finish the highlighted local setup before launching the game."}
               </p>
               <div className="hero-actions">
-                <button className="primary-action" onClick={ready ? onPlay : onOpenSettings} disabled={busy}>
+                <button className="primary-action" onClick={ready ? onOpenSmartLaunch : onOpenSettings} disabled={busy}>
                   {busy ? <RefreshCw className="spin" size={18} /> : ready ? <Gamepad2 size={19} /> : <Settings2 size={19} />}
-                  {busy ? "Working…" : ready ? playLabel : "Complete setup"}
+                  {busy ? "Working…" : ready ? "Smart Launch" : "Complete setup"}
                   <ArrowRight size={18} />
                 </button>
                 <button className="secondary-action" onClick={onOpenSettings}>
@@ -165,6 +158,9 @@ export function Dashboard({ profile, health, manifest, verification, busy, onOpe
               </div>
             </div>
             <div className="quick-actions">
+              <button onClick={onOpenSmartLaunch} disabled={busy || !profile.installDir || !manifest.valid || manifest.requiredFileCount === 0}>
+                <Gamepad2 /> Smart Launch <small>Check, maintain, recheck, open</small>
+              </button>
               <button onClick={onOpenUpdates} disabled={busy || !profile.installDir || !manifest.valid}>
                 <Download /> {profile.game === "minecraft" ? "Sync, update & repair" : "Update & repair"} <small>Staged native transaction</small>
               </button>

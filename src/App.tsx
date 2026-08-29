@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
-import { bootstrap, detectInstallations, launchProfile, prepareMinecraftBootstrap, saveProfile, selectProfile, verifyProfileFiles } from "./api";
+import { applyModpackTransaction, bootstrap, detectInstallations, launchProfile, prepareMinecraftBootstrap, prepareModpackTransaction, saveProfile, selectProfile, verifyProfileFiles } from "./api";
 import { Dashboard } from "./components/Dashboard";
 import { PublisherPanel } from "./components/PublisherPanel";
 import { SafeLaunchPanel } from "./components/SafeLaunchPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { Sidebar } from "./components/Sidebar";
+import { SmartLaunchPanel } from "./components/SmartLaunchPanel";
 import { TitleBar } from "./components/TitleBar";
 import { UpdatePanel } from "./components/UpdatePanel";
 import { previewHealth } from "./mock";
@@ -13,7 +14,7 @@ import type { BootstrapPayload, DetectedInstall, FileVerification, GameProfile }
 
 function App() {
   const [payload, setPayload] = useState<BootstrapPayload | null>(null);
-  const [page, setPage] = useState<"dashboard" | "settings" | "publisher" | "update" | "safeLaunch">("dashboard");
+  const [page, setPage] = useState<"dashboard" | "settings" | "publisher" | "update" | "safeLaunch" | "smartLaunch">("dashboard");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [fatalError, setFatalError] = useState("");
@@ -88,20 +89,6 @@ function App() {
       const found = await detectInstallations(profile);
       setCandidates(found);
       setNotice(found.length ? `Found ${found.length} installation${found.length === 1 ? "" : "s"}.` : "No supported installation was found. You can still enter a path manually.");
-    } catch (error) {
-      setNotice(errorMessage(error));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function play() {
-    if (!selectedProfile) return;
-    setBusy(true);
-    setNotice("");
-    try {
-      const result = await launchProfile(selectedProfile.id);
-      setNotice(result.message);
     } catch (error) {
       setNotice(errorMessage(error));
     } finally {
@@ -196,6 +183,19 @@ function App() {
                 onBack={() => setPage("dashboard")}
                 onNotice={setNotice}
               />
+            ) : page === "smartLaunch" ? (
+              <SmartLaunchPanel
+                profile={selectedProfile}
+                health={selectedHealth}
+                manifest={selectedManifest}
+                onBack={() => setPage("dashboard")}
+                onNotice={setNotice}
+                onVerify={verifyProfileFiles}
+                onPrepare={prepareModpackTransaction}
+                onApply={applyModpackTransaction}
+                onRefresh={refreshAfterTransaction}
+                onLaunch={launchProfile}
+              />
             ) : page === "settings" ? (
               <SettingsPanel
                 profile={selectedProfile}
@@ -216,7 +216,7 @@ function App() {
                 verification={verifications[selectedProfile.id]}
                 busy={busy}
                 onOpenSettings={() => setPage("settings")}
-                onPlay={() => void play()}
+                onOpenSmartLaunch={() => setPage("smartLaunch")}
                 onVerifyFiles={() => void verifyFiles()}
                 onOpenUpdates={() => setPage("update")}
                 onOpenSafeLaunch={() => setPage("safeLaunch")}
