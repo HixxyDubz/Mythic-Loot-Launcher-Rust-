@@ -71,9 +71,10 @@ fn select_profile(app: AppHandle, profile_id: String) -> Result<BootstrapPayload
 
 #[tauri::command]
 fn save_profile(app: AppHandle, profile: GameProfile) -> Result<BootstrapPayload, String> {
-    if profile.id.trim().is_empty() || profile.display_name.trim().is_empty() {
+    if profile.display_name.trim().is_empty() {
         return Err("A modpack profile requires an id and display name".into());
     }
+    validate_profile_id(&profile.id)?;
     if manifest::is_discord_invite(&profile.update_source)
         || manifest::is_discord_invite(&profile.manifest_url)
     {
@@ -86,10 +87,39 @@ fn save_profile(app: AppHandle, profile: GameProfile) -> Result<BootstrapPayload
         .find(|existing| existing.id == profile.id)
     {
         Some(existing) => *existing = profile,
-        None => config.profiles.push(profile),
+        None => {
+            config.selected_profile_id = profile.id.clone();
+            config.profiles.push(profile);
+        }
     }
     storage::save(&app, &config)?;
     payload(&app)
+}
+
+fn validate_profile_id(value: &str) -> Result<(), String> {
+    let valid = !value.is_empty()
+        && value.len() <= 64
+        && value.bytes().next().is_some_and(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+        && value.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b'-'));
+    if valid {
+        Ok(())
+    } else {
+        Err("Modpack id must be 1-64 lowercase letters, numbers, underscores or hyphens and start with a letter or number".into())
+    }
+}
+
+#[cfg(test)]
+mod profile_command_tests {
+    use super::validate_profile_id;
+
+    #[test]
+    fn profile_ids_are_safe_stable_catalogue_keys() {
+        assert!(validate_profile_id("minecraft_main").is_ok());
+        assert!(validate_profile_id("7-days-pack").is_ok());
+        for invalid in ["", "Uppercase", "has spaces", "../escape", "_leading"] {
+            assert!(validate_profile_id(invalid).is_err(), "accepted {invalid:?}");
+        }
+    }
 }
 
 #[tauri::command]

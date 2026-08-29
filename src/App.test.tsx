@@ -2,7 +2,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { detectedModpackBase, isMinecraftSyncTarget, SettingsPanel } from "./components/SettingsPanel";
-import { testProfiles } from "./test/fixtures";
+import { normalizeId } from "./components/ModpackManagerPanel";
+import { testBootstrapPayload, testProfiles } from "./test/fixtures";
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
@@ -17,8 +18,25 @@ vi.mock("./api", async (importOriginal) => {
     }),
     saveProfile: vi.fn(async (profile) => {
       const payload = testBootstrapPayload();
-      payload.config.profiles = payload.config.profiles.map((item) => item.id === profile.id ? profile : item);
+      const exists = payload.config.profiles.some((item) => item.id === profile.id);
+      payload.config.profiles = exists
+        ? payload.config.profiles.map((item) => item.id === profile.id ? profile : item)
+        : [...payload.config.profiles, profile];
+      if (!exists) payload.config.selectedProfileId = profile.id;
       payload.health = payload.config.profiles.map(testHealth);
+      payload.manifests.push({
+        profileId: profile.id,
+        valid: false,
+        manifestVersion: "",
+        modpackVersion: "",
+        releaseDate: "",
+        requiredFileCount: 0,
+        optionalFileCount: 0,
+        obsoleteFileCount: 0,
+        updateSize: null,
+        source: "unavailable",
+        errors: ["No published manifest yet"],
+      });
       return payload;
     }),
     githubPublisherStatus: vi.fn(async () => ({
@@ -65,6 +83,7 @@ describe("Mythic Loot launcher shell", () => {
     render(
       <SettingsPanel
         profile={testProfiles[0]}
+        games={testBootstrapPayload().games}
         dataDir="Test data directory"
         busy={false}
         candidates={[{
@@ -100,6 +119,7 @@ describe("Mythic Loot launcher shell", () => {
     render(
       <SettingsPanel
         profile={testProfiles[1]}
+        games={testBootstrapPayload().games}
         dataDir="Test data directory"
         busy={false}
         candidates={[{
@@ -131,8 +151,21 @@ describe("Mythic Loot launcher shell", () => {
     expect(await screen.findByRole("heading", { name: "Mythic Loot Minecraft" })).toBeInTheDocument();
     expect(screen.getAllByText("Choose or detect the game client").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: /complete setup/i }));
-    expect(await screen.findByText("Modpack identity")).toBeInTheDocument();
+    expect(await screen.findByText("Public modpack identity")).toBeInTheDocument();
     expect(screen.getByLabelText("Game or launcher executable")).toBeInTheDocument();
+  });
+
+  it("creates a normalized Developer modpack profile", async () => {
+    expect(normalizeId(" My New Pack! ")).toBe("my_new_pack");
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: /add modpack/i }));
+    expect(await screen.findByRole("heading", { name: "Add a modpack" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "My New Pack" } });
+    fireEvent.change(screen.getByLabelText("Repository (owner/name)"), { target: { value: "HixxyDubz/My-New-Pack" } });
+    expect(screen.getByLabelText("Modpack ID")).toHaveValue("my_new_pack");
+    fireEvent.click(screen.getByRole("button", { name: /create modpack/i }));
+    expect(await screen.findByText(/My New Pack was created/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "GitHub Publisher" })).toBeInTheDocument();
   });
 
   it("keeps GitHub repository creation behind preflight and preview", async () => {

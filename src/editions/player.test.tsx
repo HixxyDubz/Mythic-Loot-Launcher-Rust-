@@ -19,10 +19,12 @@ describe("Player edition", () => {
         onSelect={vi.fn()}
         onSettings={vi.fn()}
         onPublisher={vi.fn()}
+        onAddModpack={vi.fn()}
       />,
     );
 
     expect(screen.getByText("Player edition")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /publisher/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /add modpack/i })).not.toBeInTheDocument();
   });
 });

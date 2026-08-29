@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Check, GitBranch, HardDrive, PackageOpen, Radar, RefreshCw, Save, X } from "lucide-react";
+import { ArrowLeft, Check, HardDrive, Radar, RefreshCw, Save, X } from "lucide-react";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
-import type { DetectedInstall, GameProfile, MinecraftBootstrapArtifact, MinecraftBootstrapRequest, MinecraftLauncher } from "../types";
+import { EditionProfileMetadataSection, launcherEdition } from "@launcher-edition";
+import type { DetectedInstall, GameDefinition, GameProfile, MinecraftBootstrapArtifact, MinecraftBootstrapRequest, MinecraftLauncher } from "../types";
 
 interface SettingsPanelProps {
   profile: GameProfile;
+  games: GameDefinition[];
   dataDir: string;
   busy: boolean;
   candidates: DetectedInstall[];
@@ -17,6 +19,7 @@ interface SettingsPanelProps {
 
 export function SettingsPanel({
   profile,
+  games,
   dataDir,
   busy,
   candidates,
@@ -71,7 +74,7 @@ export function SettingsPanel({
       <div className="settings-header">
         <button className="back-button" onClick={onBack}><ArrowLeft size={18} /> Back</button>
         <div>
-          <span className="eyebrow">MODPACK SETTINGS</span>
+          <span className="eyebrow">{launcherEdition === "developer" ? "DEVELOPER MODPACK SETTINGS" : "LOCAL PLAYER SETTINGS"}</span>
           <h1>{profile.displayName}</h1>
         </div>
         <button className="primary-action save-button" onClick={() => onSave(draft)} disabled={busy}>
@@ -80,22 +83,7 @@ export function SettingsPanel({
       </div>
 
       <div className="settings-layout">
-        <section className="settings-section panel-card">
-          <div className="section-title"><PackageOpen /><div><h2>Modpack identity</h2><p>The name and game shown to players.</p></div></div>
-          <div className="form-grid">
-            <Field label="Display name" value={draft.displayName} onChange={(value) => update("displayName", value)} />
-            <Field label="Game adapter" value={draft.game} onChange={(value) => update("game", value)} />
-          </div>
-        </section>
-
-        <section className="settings-section panel-card">
-          <div className="section-title"><GitBranch /><div><h2>Distribution channel</h2><p>Dedicated GitHub release locations used to discover and download modpack updates.</p></div></div>
-          <div className="form-stack">
-            <Field label="Manifest URL" value={draft.manifestUrl} placeholder="https://github.com/owner/repo/releases/latest/download/manifest.json" onChange={(value) => update("manifestUrl", value)} />
-            <Field label="Package URL" value={draft.updateSource} placeholder="https://github.com/owner/repo/releases/download/v1.0.0/modpack.zip" onChange={(value) => update("updateSource", value)} />
-            <Field label="Local manifest path" value={draft.manifestPath} onChange={(value) => update("manifestPath", value)} />
-          </div>
-        </section>
+        <EditionProfileMetadataSection draft={draft} games={games} onUpdate={update} />
 
         <section className="settings-section panel-card">
           <div className="section-title">
@@ -136,10 +124,7 @@ export function SettingsPanel({
             <Field label="Game or launcher executable" value={draft.gameExePath} placeholder="C:\Path\To\Game.exe" onChange={(value) => update("gameExePath", value)} />
             <Field label="Game directory" value={draft.gameDir} placeholder="Optional separate game data directory" onChange={(value) => update("gameDir", value)} />
             <Field label="Modpack base folder" value={draft.installDir} placeholder="Folder managed by Mythic Loot" onChange={(value) => update("installDir", value)} />
-            <div className="form-grid">
-              <Field label="Installed modpack version" value={draft.localModpackVersion} placeholder="Not verified" onChange={(value) => update("localModpackVersion", value)} />
-              <Field label="Required modpack version" value={draft.requiredModpackVersion} onChange={(value) => update("requiredModpackVersion", value)} />
-            </div>
+            <label className="field"><span>Installed modpack version</span><input value={draft.localModpackVersion || "Not verified"} readOnly /></label>
             <Field label="Launch arguments" value={draft.launchArgs} placeholder="Optional Windows command arguments" onChange={(value) => update("launchArgs", value)} />
           </div>
 

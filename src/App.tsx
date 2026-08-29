@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
-import { EditionPublisherPanel, launcherEdition, publisherAvailable } from "@launcher-edition";
+import { EditionModpackManagerPanel, EditionPublisherPanel, launcherEdition, publisherAvailable } from "@launcher-edition";
 import { applyModpackTransaction, bootstrap, detectInstallations, launchProfile, prepareMinecraftBootstrap, prepareModpackTransaction, saveProfile, selectProfile, verifyProfileFiles } from "./api";
 import { Dashboard } from "./components/Dashboard";
 import { SafeLaunchPanel } from "./components/SafeLaunchPanel";
@@ -13,7 +13,7 @@ import type { BootstrapPayload, DetectedInstall, FileVerification, GameProfile }
 
 function App() {
   const [payload, setPayload] = useState<BootstrapPayload | null>(null);
-  const [page, setPage] = useState<"dashboard" | "settings" | "publisher" | "update" | "safeLaunch" | "smartLaunch">("dashboard");
+  const [page, setPage] = useState<"dashboard" | "settings" | "modpacks" | "publisher" | "update" | "safeLaunch" | "smartLaunch">("dashboard");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [fatalError, setFatalError] = useState("");
@@ -55,6 +55,20 @@ function App() {
       setPayload(await saveProfile(profile));
       setNotice("Modpack settings saved.");
       setPage("dashboard");
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function create(profile: GameProfile) {
+    setBusy(true);
+    setNotice("");
+    try {
+      setPayload(await saveProfile(profile));
+      setNotice(`${profile.displayName} was created. Configure its local source or open Publisher to prepare the first release.`);
+      setPage("publisher");
     } catch (error) {
       setNotice(errorMessage(error));
     } finally {
@@ -140,9 +154,18 @@ function App() {
             onSelect={(id) => void chooseProfile(id)}
             onSettings={() => setPage("settings")}
             onPublisher={() => setPage("publisher")}
+            onAddModpack={() => setPage("modpacks")}
           />
           <div className="content-region">
-            {publisherAvailable && page === "publisher" ? (
+            {publisherAvailable && page === "modpacks" ? (
+              <EditionModpackManagerPanel
+                games={payload.games}
+                profiles={payload.config.profiles}
+                busy={busy}
+                onBack={() => setPage("dashboard")}
+                onCreate={(profile) => void create(profile)}
+              />
+            ) : publisherAvailable && page === "publisher" ? (
               <EditionPublisherPanel
                 profile={selectedProfile}
                 onBack={() => setPage("dashboard")}
@@ -181,6 +204,7 @@ function App() {
             ) : page === "settings" ? (
               <SettingsPanel
                 profile={selectedProfile}
+                games={payload.games}
                 dataDir={payload.dataDir}
                 busy={busy}
                 candidates={candidates}

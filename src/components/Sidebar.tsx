@@ -10,9 +10,10 @@ interface SidebarProps {
   onSelect: (id: string) => void;
   onSettings: () => void;
   onPublisher: () => void;
+  onAddModpack: () => void;
 }
 
-export function Sidebar({ profiles, health, selectedId, edition, publisherAvailable, onSelect, onSettings, onPublisher }: SidebarProps) {
+export function Sidebar({ profiles, health, selectedId, edition, publisherAvailable, onSelect, onSettings, onPublisher, onAddModpack }: SidebarProps) {
   return (
     <aside className="sidebar">
       <div className="brand-lockup">
@@ -48,9 +49,11 @@ export function Sidebar({ profiles, health, selectedId, edition, publisherAvaila
           );
         })}
       </nav>
-      <button className="add-modpack" disabled title="Modpack creation is scheduled for the publishing workspace">
-        <Plus size={16} /> Add modpack
-      </button>
+      {publisherAvailable && (
+        <button className="add-modpack" onClick={onAddModpack}>
+          <Plus size={16} /> Add modpack
+        </button>
+      )}
       <div className="sidebar-footer">
         {publisherAvailable && (
           <button onClick={onPublisher}>

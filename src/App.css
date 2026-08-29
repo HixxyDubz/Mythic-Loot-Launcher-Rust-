@@ -78,7 +78,8 @@ button { color: inherit; }
 .status-dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; background: var(--yellow); box-shadow: 0 0 8px rgba(240,200,90,.6); }
 .status-dot.ready { background: var(--green); box-shadow: 0 0 8px rgba(85,217,148,.65); }
 .status-dot.failed, .status-dot.gamePathMissing { background: var(--red); }
-.add-modpack { margin: 12px 6px; height: 38px; display: flex; align-items: center; justify-content: center; gap: 7px; border: 1px dashed rgba(177,129,255,.22); border-radius: 10px; background: rgba(159,99,255,.035); color: #8d819b; font-size: 11px; }
+.add-modpack { margin: 12px 6px; height: 38px; display: flex; align-items: center; justify-content: center; gap: 7px; border: 1px dashed rgba(177,129,255,.32); border-radius: 10px; background: rgba(159,99,255,.055); color: #b9a8cb; font-size: 11px; cursor: pointer; }
+.add-modpack:hover { border-color: rgba(177,129,255,.65); background: rgba(159,99,255,.12); color: #fff; }
 .sidebar-footer { margin-top: auto; border-top: 1px solid var(--line); padding: 12px 4px 0; display: flex; flex-direction: column; gap: 9px; }
 .sidebar-footer button { display: flex; align-items: center; gap: 9px; height: 38px; padding: 0 11px; border: 0; border-radius: 9px; background: transparent; color: #b6a9c5; cursor: pointer; }
 .sidebar-footer button:hover { background: rgba(255,255,255,.045); color: white; }
@@ -170,7 +171,10 @@ h1, h2, h3, p { margin-top: 0; }
 .field input { width: 100%; height: 39px; padding: 0 11px; border: 1px solid rgba(255,255,255,.075); border-radius: 8px; outline: 0; background: rgba(5,4,9,.58); color: #e9e1f3; font-size: 10px; }
 .field input::placeholder { color: #564d60; }
 .field input:focus { border-color: rgba(158,99,255,.65); box-shadow: 0 0 0 3px rgba(158,99,255,.08); }
+.field input[readonly] { color: #8f829d; cursor: default; }
 .field select { width: 100%; height: 39px; padding: 0 11px; border: 1px solid rgba(255,255,255,.075); border-radius: 8px; outline: 0; background: #0c0912; color: #e9e1f3; font-size: 10px; }
+.form-error { margin: 12px 0 0; color: #ff8e9b; font-size: 10px; }
+.creation-next-step .section-title { margin-bottom: 0; }
 .publisher-status { min-height: 62px; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.025); }
 .publisher-status > svg { color: var(--yellow); }
 .publisher-status.good > svg { color: var(--green); }

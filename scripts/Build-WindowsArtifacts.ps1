@@ -102,6 +102,24 @@ foreach ($flavor in $flavors) {
         throw "$($flavor.Label) frontend mock-data verification failed."
     }
 
+    if ($flavor.Key -eq "player") {
+        $forbiddenPlayerText = @(
+            "Add a modpack",
+            "DEVELOPER WORKSPACE",
+            "Developer source folder",
+            "Distribution channel",
+            "Manifest URL",
+            "create_github_repository",
+            "publish_modpack_release"
+        )
+        $playerScripts = @(Get-ChildItem -LiteralPath (Join-Path $projectRoot "dist\assets") -Filter "*.js" -File)
+        foreach ($forbidden in $forbiddenPlayerText) {
+            if ($playerScripts | Select-String -SimpleMatch -Pattern $forbidden -Quiet) {
+                throw "Player frontend contains Developer-only text or IPC identifier: $forbidden"
+            }
+        }
+    }
+
     if (-not (Test-Path -LiteralPath $nativeExecutable -PathType Leaf)) {
         throw "The $($flavor.Label) native executable was not produced at $nativeExecutable"
     }
