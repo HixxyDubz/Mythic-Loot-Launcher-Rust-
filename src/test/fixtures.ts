@@ -1,6 +1,7 @@
-import type { BootstrapPayload, GameProfile, ManifestSummary, ProfileHealth } from "./types";
+import type { BootstrapPayload, GameProfile, ManifestSummary, ProfileHealth } from "../types";
 
-export const previewProfiles: GameProfile[] = [
+// Test-only component inputs. This module is never imported by production code.
+export const testProfiles: GameProfile[] = [
   {
     id: "minecraft_main",
     game: "minecraft",
@@ -44,7 +45,7 @@ export const previewProfiles: GameProfile[] = [
   },
 ];
 
-export function previewHealth(profile: GameProfile): ProfileHealth {
+export function testHealth(profile: GameProfile): ProfileHealth {
   if (!profile.gameExePath) {
     return {
       profileId: profile.id,
@@ -82,8 +83,8 @@ export function previewHealth(profile: GameProfile): ProfileHealth {
   };
 }
 
-export function previewPayload(): BootstrapPayload {
-  const manifests: ManifestSummary[] = previewProfiles.map((profile) => ({
+export function testBootstrapPayload(profiles = structuredClone(testProfiles)): BootstrapPayload {
+  const manifests: ManifestSummary[] = profiles.map((profile) => ({
     profileId: profile.id,
     valid: true,
     manifestVersion: "1.0",
@@ -93,36 +94,23 @@ export function previewPayload(): BootstrapPayload {
     optionalFileCount: 0,
     obsoleteFileCount: 0,
     updateSize: null,
-    source: "bundled launcher manifest",
+    source: "test input",
     errors: [],
   }));
   return {
     config: {
       schemaVersion: 2,
       selectedProfileId: "minecraft_main",
-      profiles: structuredClone(previewProfiles),
+      profiles,
       preferences: {
         reduceMotion: false,
         autoCheckUpdates: true,
         closeAfterLaunch: false,
       },
     },
-    games: [
-      ["minecraft", "Minecraft", "minecraft"],
-      ["seven_days", "7 Days to Die", "steam"],
-      ["palworld", "Palworld", "steam"],
-      ["core_keeper", "Core Keeper", "steam"],
-      ["marvel_heroes", "Marvel Heroes", "steam"],
-      ["valheim", "Valheim", "steam"],
-      ["factorio", "Factorio", "steam"],
-      ["stardew_valley", "Stardew Valley", "steam"],
-      ["hytale", "Hytale", "manual"],
-      ["world_of_warcraft", "World of Warcraft", "manual"],
-      ["runescape", "RuneScape", "manual"],
-      ["city_of_heroes", "City of Heroes - Sanctuary", "manual"],
-    ].map(([id, displayName, detectionKind]) => ({ id, displayName, detectionKind })),
-    health: previewProfiles.map(previewHealth),
+    games: [],
+    health: profiles.map(testHealth),
     manifests,
-    dataDir: "Browser preview · native persistence is available in the Tauri app",
+    dataDir: "test-only data directory",
   };
 }

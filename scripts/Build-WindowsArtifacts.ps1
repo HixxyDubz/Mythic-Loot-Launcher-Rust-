@@ -13,6 +13,7 @@ $targetRelease = Join-Path $projectRoot "src-tauri\target\release"
 $nativeExecutable = Join-Path $targetRelease "mythic-loot-launcher.exe"
 $bundleDirectory = Join-Path $targetRelease "bundle\nsis"
 $artifactDirectory = Join-Path $projectRoot "artifacts\windows"
+$mockDataCheck = Join-Path $projectRoot "scripts\Verify-NoProductionMockData.ps1"
 
 $allFlavors = @(
     [pscustomobject]@{
@@ -63,6 +64,10 @@ function Assert-ArtifactChild {
 
 $buildManifestPath = Join-Path $artifactDirectory "build-manifest.json"
 $artifactRecords = @()
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $mockDataCheck
+if ($LASTEXITCODE -ne 0) {
+    throw "Production mock-data source verification failed."
+}
 foreach ($flavor in $flavors) {
     if (-not (Test-Path -LiteralPath $flavor.ConfigPath -PathType Leaf)) {
         throw "$($flavor.Label) Tauri configuration was not found at $($flavor.ConfigPath)"
@@ -90,6 +95,11 @@ foreach ($flavor in $flavors) {
     }
     finally {
         Pop-Location
+    }
+
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $mockDataCheck -IncludeDist
+    if ($LASTEXITCODE -ne 0) {
+        throw "$($flavor.Label) frontend mock-data verification failed."
     }
 
     if (-not (Test-Path -LiteralPath $nativeExecutable -PathType Leaf)) {

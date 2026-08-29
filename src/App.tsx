@@ -9,7 +9,6 @@ import { Sidebar } from "./components/Sidebar";
 import { SmartLaunchPanel } from "./components/SmartLaunchPanel";
 import { TitleBar } from "./components/TitleBar";
 import { UpdatePanel } from "./components/UpdatePanel";
-import { previewHealth } from "./mock";
 import type { BootstrapPayload, DetectedInstall, FileVerification, GameProfile } from "./types";
 
 function App() {
@@ -43,18 +42,9 @@ function App() {
   async function chooseProfile(profileId: string) {
     if (!payload || profileId === payload.config.selectedProfileId) return;
     setCandidates([]);
-    const native = await selectProfile(profileId).catch((error) => {
+    await selectProfile(profileId).then(setPayload).catch((error) => {
       setNotice(errorMessage(error));
-      return null;
     });
-    if (native) {
-      setPayload(native);
-    } else {
-      setPayload({
-        ...payload,
-        config: { ...payload.config, selectedProfileId: profileId },
-      });
-    }
   }
 
   async function save(profile: GameProfile) {
@@ -62,17 +52,7 @@ function App() {
     setBusy(true);
     setNotice("");
     try {
-      const native = await saveProfile(profile);
-      if (native) {
-        setPayload(native);
-      } else {
-        const profiles = payload.config.profiles.map((item) => item.id === profile.id ? profile : item);
-        setPayload({
-          ...payload,
-          config: { ...payload.config, profiles },
-          health: profiles.map(previewHealth),
-        });
-      }
+      setPayload(await saveProfile(profile));
       setNotice("Modpack settings saved.");
       setPage("dashboard");
     } catch (error) {

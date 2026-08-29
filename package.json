@@ -9,6 +9,7 @@
     "build:player": "npm run build -- --mode player",
     "build:developer": "npm run build -- --mode developer",
     "check": "npm run test && npm run build",
+    "verify:no-mock-data": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Verify-NoProductionMockData.ps1 -IncludeDist",
     "test": "vitest run",
     "preview": "vite preview",
     "package:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Build-WindowsArtifacts.ps1 -Edition All",

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { previewProfiles } from "../mock";
+import { testProfiles } from "../test/fixtures";
 import type {
   FileVerification,
   ManifestSummary,
@@ -11,7 +11,7 @@ import type {
 import { SmartLaunchPanel } from "./SmartLaunchPanel";
 
 const profile = {
-  ...previewProfiles[0],
+  ...testProfiles[0],
   installDir: "C:\\Modpacks\\Minecraft Very Vanilla",
   gameDir: "C:\\Modpacks\\Minecraft Very Vanilla",
   gameExePath: "C:\\Launchers\\CurseForge.exe",

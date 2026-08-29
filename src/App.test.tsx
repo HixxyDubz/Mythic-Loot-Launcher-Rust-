@@ -2,7 +2,46 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { detectedModpackBase, isMinecraftSyncTarget, SettingsPanel } from "./components/SettingsPanel";
-import { previewProfiles } from "./mock";
+import { testProfiles } from "./test/fixtures";
+
+vi.mock("./api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./api")>();
+  const { testBootstrapPayload, testHealth } = await import("./test/fixtures");
+  return {
+    ...actual,
+    bootstrap: vi.fn(async () => testBootstrapPayload()),
+    selectProfile: vi.fn(async (profileId: string) => {
+      const payload = testBootstrapPayload();
+      payload.config.selectedProfileId = profileId;
+      return payload;
+    }),
+    saveProfile: vi.fn(async (profile) => {
+      const payload = testBootstrapPayload();
+      payload.config.profiles = payload.config.profiles.map((item) => item.id === profile.id ? profile : item);
+      payload.health = payload.config.profiles.map(testHealth);
+      return payload;
+    }),
+    githubPublisherStatus: vi.fn(async () => ({
+      ghAvailable: false,
+      authenticated: false,
+      account: "",
+      message: "GitHub CLI is unavailable in this automated test.",
+    })),
+    listRestorePoints: vi.fn(async () => []),
+    getSafeLaunchStatus: vi.fn(async (profileId: string) => ({
+      profileId,
+      active: false,
+      sessionId: "",
+      installDir: "",
+      gameProcessId: 0,
+      gameProcessRunning: false,
+      disabledFiles: 0,
+      startedAt: 0,
+      recoverable: false,
+      message: "No Safe Launch session is active.",
+    })),
+  };
+});
 
 describe("Mythic Loot launcher shell", () => {
   it("keeps a detected game root separate from its managed modpack subfolder", () => {
@@ -25,8 +64,8 @@ describe("Mythic Loot launcher shell", () => {
     }));
     render(
       <SettingsPanel
-        profile={previewProfiles[0]}
-        dataDir="Browser preview"
+        profile={testProfiles[0]}
+        dataDir="Test data directory"
         busy={false}
         candidates={[{
           label: "CurseForge · Minecraft Very Vanilla",
@@ -60,8 +99,8 @@ describe("Mythic Loot launcher shell", () => {
     const onSave = vi.fn();
     render(
       <SettingsPanel
-        profile={previewProfiles[1]}
-        dataDir="Browser preview"
+        profile={testProfiles[1]}
+        dataDir="Test data directory"
         busy={false}
         candidates={[{
           label: "Steam · 7 Days To Die",

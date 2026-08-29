@@ -16,7 +16,7 @@ Rust application core
 Windows, filesystem, game launchers and GitHub CLI
 ```
 
-React does not receive arbitrary shell or filesystem access. Native operations are exposed as purpose-specific commands from `src-tauri/src/lib.rs`.
+React does not receive arbitrary shell or filesystem access. Native operations are exposed as purpose-specific commands from `src-tauri/src/lib.rs`. No API returns invented state outside Tauri; native absence is an error.
 
 ## Current Rust modules
 
@@ -37,12 +37,12 @@ React does not receive arbitrary shell or filesystem access. Native operations a
 
 ## Current TypeScript modules
 
-- `api.ts`: typed IPC facade with a browser-only design preview fallback.
+- `api.ts`: typed IPC facade that requires native Tauri for every operation and fails closed outside the desktop application.
 - `App.tsx`: application orchestration and error/notice states.
 - `editions/`: compile-time Player/Developer route selection. The Player module never imports the Publisher workspace.
 - `components/`: title bar, modpack navigation, dashboard, settings, Developer publisher, Smart Launch, Safe Launch and staged update/repair workspaces.
 - `types.ts`: IPC data contract mirrored from Rust.
-- `mock.ts`: explicit browser-preview data; never used as native production persistence.
+- `test/fixtures.ts`: test-only component inputs imported exclusively by test files and excluded from both production bundles.
 
 ## Persistence
 

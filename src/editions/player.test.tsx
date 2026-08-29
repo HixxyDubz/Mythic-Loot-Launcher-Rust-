@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { previewHealth, previewProfiles } from "../mock";
 import { Sidebar } from "../components/Sidebar";
+import { testHealth, testProfiles } from "../test/fixtures";
 import { launcherEdition, publisherAvailable } from "./player";
 
 describe("Player edition", () => {
@@ -11,9 +11,9 @@ describe("Player edition", () => {
 
     render(
       <Sidebar
-        profiles={previewProfiles}
-        health={previewProfiles.map(previewHealth)}
-        selectedId={previewProfiles[0].id}
+        profiles={testProfiles}
+        health={testProfiles.map(testHealth)}
+        selectedId={testProfiles[0].id}
         edition="player"
         publisherAvailable={false}
         onSelect={vi.fn()}
