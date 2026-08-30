@@ -82,6 +82,17 @@ export interface BootstrapPayload {
   dataDir: string;
 }
 
+export interface CatalogRefreshOutcome {
+  payload: BootstrapPayload;
+  summary: {
+    catalogChanged: boolean;
+    manifestsChanged: number;
+    manifestsChecked: number;
+    online: boolean;
+    message: string;
+  };
+}
+
 export interface DetectedInstall {
   label: string;
   exePath: string | null;

@@ -381,10 +381,10 @@ fn prepare_package(
         ));
     }
 
-    let source = if !profile.update_source.trim().is_empty() {
-        profile.update_source.trim()
-    } else {
+    let source = if !manifest.update_url.trim().is_empty() {
         manifest.update_url.trim()
+    } else {
+        profile.update_source.trim()
     };
     if source.is_empty() {
         return Err("No dedicated modpack update package is configured".into());

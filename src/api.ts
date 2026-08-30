@@ -1,6 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import type {
   BootstrapPayload,
+  CatalogRefreshOutcome,
   DetectedInstall,
   FileVerification,
   GameProfile,
@@ -35,6 +36,11 @@ function requireNative(operation: string): void {
 export async function bootstrap(): Promise<BootstrapPayload> {
   requireNative("Launcher startup");
   return invoke<BootstrapPayload>("bootstrap");
+}
+
+export async function refreshPublicCatalog(): Promise<CatalogRefreshOutcome> {
+  requireNative("Public catalogue refresh");
+  return invoke<CatalogRefreshOutcome>("refresh_public_catalog");
 }
 
 export async function selectProfile(profileId: string): Promise<BootstrapPayload> {

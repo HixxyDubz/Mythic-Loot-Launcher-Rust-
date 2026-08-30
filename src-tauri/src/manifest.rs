@@ -9,7 +9,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::AppHandle;
 
-use crate::{models::GameProfile, safe_path, storage};
+use crate::{models::GameProfile, remote, safe_path, storage};
+
+const MAX_REMOTE_MANIFEST_BYTES: usize = 64 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
@@ -103,6 +105,24 @@ pub fn load_for_profile(app: &AppHandle, profile: &GameProfile) -> LoadedManifes
         },
         Err(error) => invalid_loaded(profile, error),
     }
+}
+
+pub fn refresh_remote(app: &AppHandle, profile: &GameProfile) -> Result<bool, String> {
+    if profile.manifest_url.trim().is_empty() {
+        return Ok(false);
+    }
+    let bytes = remote::fetch_https(profile.manifest_url.trim(), MAX_REMOTE_MANIFEST_BYTES)?;
+    let manifest: Manifest = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("Remote manifest JSON is invalid: {error}"))?;
+    let errors = validate(&manifest, Some(profile));
+    if !errors.is_empty() {
+        return Err(format!(
+            "Remote manifest failed validation: {}",
+            errors.join("; ")
+        ));
+    }
+    let destination = safe_path::safe_join(&storage::data_dir(app)?, &profile.manifest_path)?;
+    remote::write_atomic(&destination, &bytes)
 }
 
 fn invalid_loaded(profile: &GameProfile, error: String) -> LoadedManifest {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 import { EditionModpackManagerPanel, EditionPublisherPanel, launcherEdition, publisherAvailable } from "@launcher-edition";
-import { applyModpackTransaction, bootstrap, detectInstallations, launchProfile, prepareMinecraftBootstrap, prepareModpackTransaction, saveProfile, selectProfile, verifyProfileFiles } from "./api";
+import { applyModpackTransaction, bootstrap, detectInstallations, launchProfile, prepareMinecraftBootstrap, prepareModpackTransaction, refreshPublicCatalog, saveProfile, selectProfile, verifyProfileFiles } from "./api";
 import { Dashboard } from "./components/Dashboard";
 import { SafeLaunchPanel } from "./components/SafeLaunchPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
@@ -22,7 +22,17 @@ function App() {
 
   useEffect(() => {
     void bootstrap()
-      .then(setPayload)
+      .then((initial) => {
+        setPayload(initial);
+        void refreshPublicCatalog()
+          .then((result) => {
+            setPayload(result.payload);
+            if (result.summary.catalogChanged || result.summary.manifestsChanged > 0) {
+              setNotice(result.summary.message);
+            }
+          })
+          .catch(() => undefined);
+      })
       .catch((error) => setFatalError(errorMessage(error)));
   }, []);
 

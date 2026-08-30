@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { detectedModpackBase, isMinecraftSyncTarget, SettingsPanel } from "./components/SettingsPanel";
 import { normalizeId } from "./components/ModpackManagerPanel";
+import { refreshPublicCatalog } from "./api";
 import { testBootstrapPayload, testProfiles } from "./test/fixtures";
 
 vi.mock("./api", async (importOriginal) => {
@@ -11,6 +12,16 @@ vi.mock("./api", async (importOriginal) => {
   return {
     ...actual,
     bootstrap: vi.fn(async () => testBootstrapPayload()),
+    refreshPublicCatalog: vi.fn(async () => ({
+      payload: testBootstrapPayload(),
+      summary: {
+        catalogChanged: false,
+        manifestsChanged: 0,
+        manifestsChecked: 2,
+        online: false,
+        message: "Using verified local data.",
+      },
+    })),
     selectProfile: vi.fn(async (profileId: string) => {
       const payload = testBootstrapPayload();
       payload.config.selectedProfileId = profileId;
@@ -153,6 +164,31 @@ describe("Mythic Loot launcher shell", () => {
     fireEvent.click(screen.getByRole("button", { name: /complete setup/i }));
     expect(await screen.findByText("Public modpack identity")).toBeInTheDocument();
     expect(screen.getByLabelText("Game or launcher executable")).toBeInTheDocument();
+  });
+
+  it("merges a refreshed public catalogue into the visible modpack list", async () => {
+    const newProfile = {
+      ...testProfiles[0],
+      id: "catalog_pack",
+      displayName: "Catalogue Pack",
+      installDir: "",
+      gameExePath: "",
+      localModpackVersion: "",
+    };
+    const refreshed = testBootstrapPayload([...structuredClone(testProfiles), newProfile]);
+    vi.mocked(refreshPublicCatalog).mockResolvedValueOnce({
+      payload: refreshed,
+      summary: {
+        catalogChanged: true,
+        manifestsChanged: 1,
+        manifestsChecked: 3,
+        online: true,
+        message: "Public catalogue refreshed.",
+      },
+    });
+    render(<App />);
+    expect(await screen.findByText("Catalogue Pack")).toBeInTheDocument();
+    expect(screen.getByText("Public catalogue refreshed.")).toBeInTheDocument();
   });
 
   it("creates a normalized Developer modpack profile", async () => {

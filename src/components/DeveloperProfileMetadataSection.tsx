@@ -31,7 +31,6 @@ export function DeveloperProfileMetadataSection({ draft, games, onUpdate }: Deve
         <div className="section-title"><GitBranch /><div><h2>Distribution channel</h2><p>Developer-owned GitHub locations used to discover and download modpack updates.</p></div></div>
         <div className="form-stack">
           <Field label="Manifest URL" value={draft.manifestUrl} placeholder="https://github.com/owner/repo/releases/latest/download/manifest.json" onChange={(value) => onUpdate("manifestUrl", value)} />
-          <Field label="Package URL override" value={draft.updateSource} placeholder="Normally supplied by the published manifest" onChange={(value) => onUpdate("updateSource", value)} />
           <Field label="Local manifest path" value={draft.manifestPath} onChange={(value) => onUpdate("manifestPath", value)} />
           <Field label="Discord invitation" value={draft.discordInvite} placeholder="Optional public community link" onChange={(value) => onUpdate("discordInvite", value)} />
         </div>

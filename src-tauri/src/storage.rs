@@ -133,8 +133,14 @@ fn validate(config: &LauncherConfig) -> Result<(), String> {
     for profile in &config.profiles {
         if profile.id.is_empty()
             || profile.id.len() > 64
-            || !profile.id.bytes().next().is_some_and(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
-            || !profile.id.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b'-'))
+            || !profile
+                .id
+                .bytes()
+                .next()
+                .is_some_and(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+            || !profile.id.bytes().all(|byte| {
+                byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b'-')
+            })
         {
             return Err(format!("Invalid modpack profile id: {}", profile.id));
         }

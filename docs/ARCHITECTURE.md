@@ -21,6 +21,8 @@ React does not receive arbitrary shell or filesystem access. Native operations a
 ## Current Rust modules
 
 - `models.rs`: server-free modpack profile/configuration contract, readiness types and twelve-game catalogue.
+- `catalog.rs`: strict public catalogue schema, verified cache merge that preserves player-local state, and asynchronous GitHub catalogue/manifest refresh.
+- `remote.rs`: bounded HTTPS metadata reads and rollback-capable atomic cache replacement.
 - `storage.rs`: Tauri data-directory resolution, portable override, validation, corruption preservation, backup and staged replacement.
 - `detection.rs`: configured candidates, Minecraft launcher/instance locations and Steam library/game scans.
 - `readiness.rs`: fail-closed executable, folder, trusted-manifest and modpack-version gates.
@@ -49,6 +51,8 @@ React does not receive arbitrary shell or filesystem access. Native operations a
 The native store resolves through Tauri's application data directory. Player and Developer use distinct application identifiers, so their normal installed state is separate and both editions can coexist. `MYTHIC_LOOT_DATA_DIR` overrides it only when explicitly set, which supports portable development and isolated acceptance runs. Invalid JSON is renamed to a timestamped `launcher-config.corrupt-*.json` before a fresh default is created.
 
 Detected game roots and managed modpack roots are distinct. For 7 Days to Die, detection records the Steam game folder for launching and its `Mods` child as the installation/publishing root because generated manifest paths are relative to `Mods`. Minecraft uses a selected CurseForge or Modrinth instance root directly. The launcher records that launcher choice and routes its existing staged update/repair transaction into the selected instance; it does not copy an owner's live profile directly to another player. Saves, logs, screenshots, options, caches and launcher/account metadata are outside the trusted release inventory and remain untouched. Current and legacy Modrinth profile roots are detected. First-time setup creates deterministic launcher-native bootstrap archives under application data: a CurseForge import ZIP with `manifest.json`, or a Modrinth `.mrpack` with `modrinth.index.json`. Both declare the trusted Minecraft/loader versions and an empty file list so the launcher creates the profile before Mythic Loot performs the verified GitHub sync. Actual import in both third-party launchers remains an external acceptance gate.
+
+The public catalogue feed is fixed to the launcher's GitHub Releases channel and contains only public profile identity, version, artwork, manifest, deployment and optional Discord metadata. It cannot carry executable paths, installation folders, launcher choices, launch arguments or installed versions. Startup renders immediately from bundled and last-verified cached state, then refreshes the bounded HTTPS catalogue and each dedicated manifest in a background command. Schema/path/URL/identity validation completes before atomic cache replacement; invalid or unavailable remote data leaves the previous verified cache and local player state in place. The modpack manifest's package URL and checksum take precedence over a legacy profile fallback so a refreshed manifest cannot accidentally download an older pinned package.
 
 ## Transaction boundary
 

@@ -1,3 +1,4 @@
+mod catalog;
 mod detection;
 mod launch;
 mod manifest;
@@ -8,6 +9,7 @@ mod packager;
 #[cfg(feature = "developer")]
 mod publisher;
 mod readiness;
+mod remote;
 mod restore_points;
 mod safe_launch;
 mod safe_path;
@@ -26,8 +28,18 @@ use safe_launch::{SafeLaunchOutcome, SafeLaunchRecovery, SafeLaunchStatus};
 use tauri::{AppHandle, Manager};
 use updater::{TransactionOutcome, TransactionPreview, TransactionRequest};
 
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CatalogRefreshOutcome {
+    payload: BootstrapPayload,
+    summary: catalog::RefreshSummary,
+}
+
 fn payload(app: &AppHandle) -> Result<BootstrapPayload, String> {
-    let config = storage::load_or_create(app)?;
+    let mut config = storage::load_or_create(app)?;
+    if catalog::apply_cached(app, &mut config)? {
+        storage::save(app, &config)?;
+    }
     let loaded: Vec<_> = config
         .profiles
         .iter()
@@ -47,6 +59,19 @@ fn payload(app: &AppHandle) -> Result<BootstrapPayload, String> {
         manifests,
         data_dir: storage::data_dir(app)?.display().to_string(),
     })
+}
+
+#[tauri::command]
+async fn refresh_public_catalog(app: AppHandle) -> Result<CatalogRefreshOutcome, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let summary = catalog::refresh(&app)?;
+        Ok(CatalogRefreshOutcome {
+            payload: payload(&app)?,
+            summary,
+        })
+    })
+    .await
+    .map_err(|error| format!("Public catalogue refresh task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -99,8 +124,13 @@ fn save_profile(app: AppHandle, profile: GameProfile) -> Result<BootstrapPayload
 fn validate_profile_id(value: &str) -> Result<(), String> {
     let valid = !value.is_empty()
         && value.len() <= 64
-        && value.bytes().next().is_some_and(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
-        && value.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b'-'));
+        && value
+            .bytes()
+            .next()
+            .is_some_and(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+        && value.bytes().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b'-')
+        });
     if valid {
         Ok(())
     } else {
@@ -117,7 +147,10 @@ mod profile_command_tests {
         assert!(validate_profile_id("minecraft_main").is_ok());
         assert!(validate_profile_id("7-days-pack").is_ok());
         for invalid in ["", "Uppercase", "has spaces", "../escape", "_leading"] {
-            assert!(validate_profile_id(invalid).is_err(), "accepted {invalid:?}");
+            assert!(
+                validate_profile_id(invalid).is_err(),
+                "accepted {invalid:?}"
+            );
         }
     }
 }
@@ -330,6 +363,7 @@ pub fn run() {
     #[cfg(feature = "developer")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         bootstrap,
+        refresh_public_catalog,
         select_profile,
         save_profile,
         detect_installations,
@@ -354,6 +388,7 @@ pub fn run() {
     #[cfg(not(feature = "developer"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         bootstrap,
+        refresh_public_catalog,
         select_profile,
         save_profile,
         detect_installations,
