@@ -33,6 +33,7 @@ export function DeveloperProfileMetadataSection({ draft, games, onUpdate }: Deve
           <Field label="Manifest URL" value={draft.manifestUrl} placeholder="https://github.com/owner/repo/releases/latest/download/manifest.json" onChange={(value) => onUpdate("manifestUrl", value)} />
           <Field label="Local manifest path" value={draft.manifestPath} onChange={(value) => onUpdate("manifestPath", value)} />
           <Field label="Discord invitation" value={draft.discordInvite} placeholder="Optional public community link" onChange={(value) => onUpdate("discordInvite", value)} />
+          <label className="confirmation-row"><input type="checkbox" checked={draft.catalogVisible} onChange={(event) => onUpdate("catalogVisible", event.target.checked)} /><span>Include this released modpack in the Player public catalogue.</span></label>
         </div>
       </section>
     </>

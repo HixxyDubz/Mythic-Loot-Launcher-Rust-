@@ -1,0 +1,28 @@
+{
+  "catalogVersion": "1.0",
+  "generatedAt": "2026-08-30T18:00:00Z",
+  "profiles": [
+    {
+      "id": "minecraft_main",
+      "game": "minecraft",
+      "displayName": "Mythic Loot Minecraft",
+      "requiredGameVersion": "1.21.1",
+      "requiredModpackVersion": "1.0.1",
+      "manifestUrl": "https://github.com/HixxyDubz/Mythic-Loot-Minecraft-Modpack/releases/latest/download/minecraft_main-manifest.json",
+      "deploymentSubdir": "",
+      "logoUrl": "/assets/minecraft.png",
+      "discordInvite": ""
+    },
+    {
+      "id": "seven_days_main",
+      "game": "seven_days",
+      "displayName": "Mythic Loot 7 Days",
+      "requiredGameVersion": "1.0",
+      "requiredModpackVersion": "1.0.0",
+      "manifestUrl": "https://github.com/HixxyDubz/Mythic-Loot-7DTD-Modpack/releases/latest/download/seven_days_main-manifest.json",
+      "deploymentSubdir": "Mods",
+      "logoUrl": "/assets/seven-days.png",
+      "discordInvite": ""
+    }
+  ]
+}

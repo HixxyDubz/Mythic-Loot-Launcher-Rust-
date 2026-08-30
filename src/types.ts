@@ -25,6 +25,7 @@ export interface GameProfile {
   manifestUrl: string;
   deploymentSubdir: string;
   logoPath: string;
+  catalogVisible: boolean;
 }
 
 export interface LauncherConfig {
@@ -182,9 +183,47 @@ export interface PackagePreview {
 }
 
 export interface ReleasePublication {
+  profileId: string;
+  version: string;
   repository: string;
   tag: string;
+  manifestUrl: string;
   url: string;
+  message: string;
+}
+
+export interface ModpackPublicationOutcome {
+  publication: ReleasePublication;
+  payload: BootstrapPayload;
+}
+
+export interface CatalogProfilePreview {
+  id: string;
+  displayName: string;
+  version: string;
+  manifestUrl: string;
+}
+
+export interface CatalogPreview {
+  previewId: string;
+  repository: string;
+  branch: string;
+  publicUrl: string;
+  outputPath: string;
+  bytes: number;
+  sha256: string;
+  profiles: CatalogProfilePreview[];
+  hiddenProfiles: number;
+  issues: string[];
+  ready: boolean;
+}
+
+export interface CatalogPublication {
+  repository: string;
+  branch: string;
+  publicUrl: string;
+  commitUrl: string;
+  profiles: number;
   message: string;
 }
 

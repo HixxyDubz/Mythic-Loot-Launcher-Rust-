@@ -1,4 +1,6 @@
 mod catalog;
+#[cfg(feature = "developer")]
+mod catalog_publisher;
 mod detection;
 mod launch;
 mod manifest;
@@ -28,6 +30,9 @@ use safe_launch::{SafeLaunchOutcome, SafeLaunchRecovery, SafeLaunchStatus};
 use tauri::{AppHandle, Manager};
 use updater::{TransactionOutcome, TransactionPreview, TransactionRequest};
 
+#[cfg(feature = "developer")]
+use catalog_publisher::{CatalogPreview, CatalogPublication};
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CatalogRefreshOutcome {
@@ -35,11 +40,46 @@ struct CatalogRefreshOutcome {
     summary: catalog::RefreshSummary,
 }
 
+#[cfg(feature = "developer")]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ModpackPublicationOutcome {
+    publication: ReleasePublication,
+    payload: BootstrapPayload,
+}
+
+#[cfg(feature = "developer")]
+fn apply_release_publication(
+    config: &mut models::LauncherConfig,
+    publication: &ReleasePublication,
+) -> Result<(), String> {
+    let profile = config
+        .profiles
+        .iter_mut()
+        .find(|profile| profile.id == publication.profile_id)
+        .ok_or_else(|| {
+            format!(
+                "Release {} was published, but its local modpack profile is no longer available",
+                publication.tag
+            )
+        })?;
+    profile.required_modpack_version = publication.version.clone();
+    profile.manifest_url = publication.manifest_url.clone();
+    profile.update_source.clear();
+    profile.catalog_visible = true;
+    Ok(())
+}
+
 fn payload(app: &AppHandle) -> Result<BootstrapPayload, String> {
-    let mut config = storage::load_or_create(app)?;
-    if catalog::apply_cached(app, &mut config)? {
-        storage::save(app, &config)?;
-    }
+    let config = storage::load_or_create(app)?;
+    #[cfg(not(feature = "developer"))]
+    let config = {
+        let mut config = config;
+        if catalog::apply_cached(app, &mut config)? {
+            storage::save(app, &config)?;
+        }
+        config
+    };
     let loaded: Vec<_> = config
         .profiles
         .iter()
@@ -155,6 +195,31 @@ mod profile_command_tests {
     }
 }
 
+#[cfg(all(test, feature = "developer"))]
+mod publication_command_tests {
+    use super::*;
+
+    #[test]
+    fn successful_release_updates_the_profile_for_catalogue_publication() {
+        let mut config = models::LauncherConfig::default();
+        config.profiles[0].catalog_visible = false;
+        let publication = ReleasePublication {
+            profile_id: "minecraft_main".into(),
+            version: "2.0.0".into(),
+            repository: "owner/repository".into(),
+            tag: "v2.0.0".into(),
+            manifest_url: "https://github.com/owner/repository/releases/latest/download/minecraft_main-manifest.json".into(),
+            url: "https://github.com/owner/repository/releases/tag/v2.0.0".into(),
+            message: "published".into(),
+        };
+        apply_release_publication(&mut config, &publication).unwrap();
+        assert_eq!(config.profiles[0].required_modpack_version, "2.0.0");
+        assert_eq!(config.profiles[0].manifest_url, publication.manifest_url);
+        assert!(config.profiles[0].update_source.is_empty());
+        assert!(config.profiles[0].catalog_visible);
+    }
+}
+
 #[tauri::command]
 fn detect_installations(profile: GameProfile) -> Vec<DetectedInstall> {
     detection::detect(&profile)
@@ -202,12 +267,46 @@ async fn prepare_modpack_release(
 #[tauri::command]
 #[cfg(feature = "developer")]
 async fn publish_modpack_release(
+    app: AppHandle,
     preview_id: String,
     confirmed: bool,
-) -> Result<ReleasePublication, String> {
-    tauri::async_runtime::spawn_blocking(move || packager::publish(&preview_id, confirmed))
+) -> Result<ModpackPublicationOutcome, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let publication = packager::publish(&preview_id, confirmed)?;
+        let mut config = storage::load_or_create(&app)?;
+        apply_release_publication(&mut config, &publication)?;
+        storage::save(&app, &config).map_err(|error| {
+            format!(
+                "Release {} was published, but the local profile could not be updated: {error}",
+                publication.tag
+            )
+        })?;
+        Ok(ModpackPublicationOutcome {
+            publication,
+            payload: payload(&app)?,
+        })
+    })
+    .await
+    .map_err(|error| format!("GitHub release task failed: {error}"))?
+}
+
+#[tauri::command]
+#[cfg(feature = "developer")]
+async fn prepare_public_catalog(app: AppHandle) -> Result<CatalogPreview, String> {
+    tauri::async_runtime::spawn_blocking(move || catalog_publisher::prepare(&app))
         .await
-        .map_err(|error| format!("GitHub release task failed: {error}"))?
+        .map_err(|error| format!("Public catalogue preparation task failed: {error}"))?
+}
+
+#[tauri::command]
+#[cfg(feature = "developer")]
+async fn publish_public_catalog(
+    preview_id: String,
+    confirmed: bool,
+) -> Result<CatalogPublication, String> {
+    tauri::async_runtime::spawn_blocking(move || catalog_publisher::publish(&preview_id, confirmed))
+        .await
+        .map_err(|error| format!("Public catalogue publication task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -372,6 +471,8 @@ pub fn run() {
         create_github_repository,
         prepare_modpack_release,
         publish_modpack_release,
+        prepare_public_catalog,
+        publish_public_catalog,
         prepare_modpack_transaction,
         apply_modpack_transaction,
         list_restore_points,

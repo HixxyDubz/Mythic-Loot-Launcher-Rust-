@@ -1,9 +1,10 @@
-import type { GameDefinition, GameProfile } from "../types";
+import type { BootstrapPayload, GameDefinition, GameProfile } from "../types";
 
 export interface EditionPublisherProps {
   profile: GameProfile;
   onBack: () => void;
   onNotice: (message: string) => void;
+  onPayload: (payload: BootstrapPayload) => void;
 }
 
 export interface EditionModpackManagerProps {

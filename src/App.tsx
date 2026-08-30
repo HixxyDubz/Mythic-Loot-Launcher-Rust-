@@ -180,6 +180,7 @@ function App() {
                 profile={selectedProfile}
                 onBack={() => setPage("dashboard")}
                 onNotice={setNotice}
+                onPayload={setPayload}
               />
             ) : page === "update" ? (
               <UpdatePanel

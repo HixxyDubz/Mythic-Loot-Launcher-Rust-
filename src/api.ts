@@ -1,6 +1,8 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import type {
   BootstrapPayload,
+  CatalogPreview,
+  CatalogPublication,
   CatalogRefreshOutcome,
   DetectedInstall,
   FileVerification,
@@ -8,10 +10,10 @@ import type {
   LaunchOutcome,
   MinecraftBootstrapArtifact,
   MinecraftBootstrapRequest,
+  ModpackPublicationOutcome,
   PackagePreview,
   PackageRequest,
   PublisherStatus,
-  ReleasePublication,
   RepositoryCreation,
   RepositoryRequest,
   RestoreOutcome,
@@ -93,9 +95,22 @@ export async function prepareModpackRelease(request: PackageRequest): Promise<Pa
 export async function publishModpackRelease(
   previewId: string,
   confirmed: boolean,
-): Promise<ReleasePublication> {
+): Promise<ModpackPublicationOutcome> {
   requireNative("GitHub release publishing");
-  return invoke<ReleasePublication>("publish_modpack_release", { previewId, confirmed });
+  return invoke<ModpackPublicationOutcome>("publish_modpack_release", { previewId, confirmed });
+}
+
+export async function preparePublicCatalog(): Promise<CatalogPreview> {
+  requireNative("Public catalogue preparation");
+  return invoke<CatalogPreview>("prepare_public_catalog");
+}
+
+export async function publishPublicCatalog(
+  previewId: string,
+  confirmed: boolean,
+): Promise<CatalogPublication> {
+  requireNative("Public catalogue publishing");
+  return invoke<CatalogPublication>("publish_public_catalog", { previewId, confirmed });
 }
 
 export async function prepareModpackTransaction(

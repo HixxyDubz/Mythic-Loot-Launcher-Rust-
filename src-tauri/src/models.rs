@@ -21,6 +21,12 @@ pub struct GameProfile {
     pub manifest_url: String,
     pub deployment_subdir: String,
     pub logo_path: String,
+    #[serde(default = "catalog_visible_by_default")]
+    pub catalog_visible: bool,
+}
+
+fn catalog_visible_by_default() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -80,6 +86,7 @@ fn minecraft_profile() -> GameProfile {
         manifest_url: "https://github.com/HixxyDubz/Mythic-Loot-Minecraft-Modpack/releases/latest/download/minecraft_main-manifest.json".into(),
         deployment_subdir: String::new(),
         logo_path: "/assets/minecraft.png".into(),
+        catalog_visible: true,
     }
 }
 
@@ -102,6 +109,7 @@ fn seven_days_profile() -> GameProfile {
         manifest_url: "https://github.com/HixxyDubz/Mythic-Loot-7DTD-Modpack/releases/latest/download/seven_days_main-manifest.json".into(),
         deployment_subdir: "Mods".into(),
         logo_path: "/assets/seven-days.png".into(),
+        catalog_visible: true,
     }
 }
 

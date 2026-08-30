@@ -110,7 +110,10 @@ foreach ($flavor in $flavors) {
             "Distribution channel",
             "Manifest URL",
             "create_github_repository",
-            "publish_modpack_release"
+            "publish_modpack_release",
+            "prepare_public_catalog",
+            "publish_public_catalog",
+            "Player public catalogue"
         )
         $playerScripts = @(Get-ChildItem -LiteralPath (Join-Path $projectRoot "dist\assets") -Filter "*.js" -File)
         foreach ($forbidden in $forbiddenPlayerText) {

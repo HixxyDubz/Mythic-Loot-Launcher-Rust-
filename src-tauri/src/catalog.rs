@@ -1,15 +1,23 @@
-use std::{collections::HashSet, env, fs, path::PathBuf};
+use std::{collections::HashSet, env, path::PathBuf};
+
+#[cfg(not(feature = "developer"))]
+use std::fs;
 
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
-use crate::{
-    manifest,
-    models::{GameProfile, LauncherConfig},
-    remote, safe_path, storage,
-};
+use crate::{manifest, remote, safe_path, storage};
 
-pub const DEFAULT_CATALOG_URL: &str = "https://github.com/HixxyDubz/Mythic-Loot-Launcher-Rust-/releases/latest/download/launcher-catalog.json";
+#[cfg(any(not(feature = "developer"), test))]
+use crate::models::{GameProfile, LauncherConfig};
+
+#[cfg(feature = "developer")]
+pub const CATALOG_REPOSITORY: &str = "HixxyDubz/Mythic-Loot-Launcher-Rust-";
+#[cfg(feature = "developer")]
+pub const CATALOG_BRANCH: &str = "main";
+#[cfg(feature = "developer")]
+pub const CATALOG_FILE_PATH: &str = "launcher-catalog.json";
+pub const DEFAULT_CATALOG_URL: &str = "https://raw.githubusercontent.com/HixxyDubz/Mythic-Loot-Launcher-Rust-/main/launcher-catalog.json";
 const MAX_CATALOG_BYTES: usize = 4 * 1024 * 1024;
 const CATALOG_PATH: &str = "catalog/launcher-catalog.json";
 
@@ -45,6 +53,7 @@ pub struct RefreshSummary {
     pub message: String,
 }
 
+#[cfg(not(feature = "developer"))]
 pub fn apply_cached(app: &AppHandle, config: &mut LauncherConfig) -> Result<bool, String> {
     let path = cache_path(app)?;
     if !path.is_file() {
@@ -70,7 +79,6 @@ pub fn apply_cached(app: &AppHandle, config: &mut LauncherConfig) -> Result<bool
 }
 
 pub fn refresh(app: &AppHandle) -> Result<RefreshSummary, String> {
-    let mut config = storage::load_or_create(app)?;
     let mut notes = Vec::new();
     let mut online = false;
     let mut catalog_changed = false;
@@ -79,10 +87,20 @@ pub fn refresh(app: &AppHandle) -> Result<RefreshSummary, String> {
     match remote::fetch_https(&url, MAX_CATALOG_BYTES).and_then(|bytes| {
         let catalog = parse(&bytes)?;
         let cache_changed = remote::write_atomic(&cache_path(app)?, &bytes)?;
-        let merged = merge(&mut config, &catalog);
-        if merged > 0 {
-            storage::save(app, &config)?;
-        }
+        #[cfg(not(feature = "developer"))]
+        let merged = {
+            let mut config = storage::load_or_create(app)?;
+            let merged = merge(&mut config, &catalog);
+            if merged > 0 {
+                storage::save(app, &config)?;
+            }
+            merged
+        };
+        #[cfg(feature = "developer")]
+        let merged = {
+            drop(catalog);
+            0
+        };
         Ok(cache_changed || merged > 0)
     }) {
         Ok(changed) => {
@@ -207,6 +225,7 @@ pub fn validate(catalog: &PublicCatalog) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(any(not(feature = "developer"), test))]
 pub fn merge(config: &mut LauncherConfig, catalog: &PublicCatalog) -> usize {
     let mut changed = 0;
     for published in &catalog.profiles {
@@ -226,6 +245,7 @@ pub fn merge(config: &mut LauncherConfig, catalog: &PublicCatalog) -> usize {
     changed
 }
 
+#[cfg(any(not(feature = "developer"), test))]
 fn apply_public(profile: &mut GameProfile, published: &CatalogProfile) {
     profile.game.clone_from(&published.game);
     profile.display_name.clone_from(&published.display_name);
@@ -244,6 +264,7 @@ fn apply_public(profile: &mut GameProfile, published: &CatalogProfile) {
     profile.update_source.clear();
 }
 
+#[cfg(any(not(feature = "developer"), test))]
 fn new_profile(published: &CatalogProfile) -> GameProfile {
     let mut profile = GameProfile {
         id: published.id.clone(),
@@ -263,6 +284,7 @@ fn new_profile(published: &CatalogProfile) -> GameProfile {
         manifest_url: String::new(),
         deployment_subdir: String::new(),
         logo_path: String::new(),
+        catalog_visible: true,
     };
     apply_public(&mut profile, published);
     profile
@@ -354,5 +376,13 @@ mod tests {
         let mut value = catalog();
         value.profiles[0].manifest_url = "http://example.invalid/manifest.json".into();
         assert!(validate(&value).unwrap_err().contains("HTTPS"));
+    }
+
+    #[test]
+    fn checked_in_player_catalogue_passes_the_public_contract() {
+        let catalog = parse(include_bytes!("../../launcher-catalog.json")).unwrap();
+        assert_eq!(catalog.profiles.len(), 2);
+        assert_eq!(catalog.profiles[0].id, "minecraft_main");
+        assert_eq!(catalog.profiles[1].id, "seven_days_main");
     }
 }

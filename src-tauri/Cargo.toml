@@ -16,7 +16,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [features]
 default = ["developer"]
-developer = []
+developer = ["dep:base64"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -34,6 +34,7 @@ time = { version = "0.3", features = ["formatting"] }
 zip = { version = "8.6", default-features = false, features = ["deflate"] }
 fs2 = "0.4"
 ureq = "3.4"
+base64 = { version = "0.22", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading"] }

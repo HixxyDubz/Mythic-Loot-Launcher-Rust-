@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   Archive,
   ArrowLeft,
+  BookOpen,
   CheckCircle2,
   CloudUpload,
   Eye,
@@ -14,9 +15,14 @@ import {
   createGithubRepository,
   githubPublisherStatus,
   prepareModpackRelease,
+  preparePublicCatalog,
   publishModpackRelease,
+  publishPublicCatalog,
 } from "../api";
 import type {
+  BootstrapPayload,
+  CatalogPreview,
+  CatalogPublication,
   GameProfile,
   PackagePreview,
   PublisherStatus,
@@ -29,9 +35,10 @@ interface PublisherPanelProps {
   profile: GameProfile;
   onBack: () => void;
   onNotice: (message: string) => void;
+  onPayload: (payload: BootstrapPayload) => void;
 }
 
-export function PublisherPanel({ profile, onBack, onNotice }: PublisherPanelProps) {
+export function PublisherPanel({ profile, onBack, onNotice, onPayload }: PublisherPanelProps) {
   const [status, setStatus] = useState<PublisherStatus | null>(null);
   const [repository, setRepository] = useState(guessRepository(profile.manifestUrl));
   const [description, setDescription] = useState(`${profile.displayName} release repository`);
@@ -47,6 +54,9 @@ export function PublisherPanel({ profile, onBack, onNotice }: PublisherPanelProp
   const [busy, setBusy] = useState(false);
   const [creation, setCreation] = useState<RepositoryCreation | null>(null);
   const [publication, setPublication] = useState<ReleasePublication | null>(null);
+  const [catalogPreview, setCatalogPreview] = useState<CatalogPreview | null>(null);
+  const [catalogConfirmed, setCatalogConfirmed] = useState(false);
+  const [catalogPublication, setCatalogPublication] = useState<CatalogPublication | null>(null);
 
   function invalidateRelease() {
     setReleasePreview(null);
@@ -125,8 +135,46 @@ export function PublisherPanel({ profile, onBack, onNotice }: PublisherPanelProp
     setBusy(true);
     try {
       const result = await publishModpackRelease(releasePreview.previewId, releaseConfirmed);
-      setPublication(result);
+      setPublication(result.publication);
+      onPayload(result.payload);
       setReleaseConfirmed(false);
+      setCatalogPreview(null);
+      setCatalogPublication(null);
+      onNotice(`${result.publication.message} The local profile now points to its latest manifest.`);
+    } catch (error) {
+      onNotice(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function prepareCatalog() {
+    setBusy(true);
+    setCatalogConfirmed(false);
+    setCatalogPublication(null);
+    try {
+      const result = await preparePublicCatalog();
+      setCatalogPreview(result);
+      onNotice(
+        result.ready
+          ? `Public catalogue preview ready with ${result.profiles.length} visible modpack${result.profiles.length === 1 ? "" : "s"}.`
+          : `Catalogue preparation stopped with ${result.issues.length} safety issue${result.issues.length === 1 ? "" : "s"}.`,
+      );
+    } catch (error) {
+      setCatalogPreview(null);
+      onNotice(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function publishCatalog() {
+    if (!catalogPreview) return;
+    setBusy(true);
+    try {
+      const result = await publishPublicCatalog(catalogPreview.previewId, catalogConfirmed);
+      setCatalogPublication(result);
+      setCatalogConfirmed(false);
       onNotice(result.message);
     } catch (error) {
       onNotice(errorMessage(error));
@@ -240,6 +288,47 @@ export function PublisherPanel({ profile, onBack, onNotice }: PublisherPanelProp
         )}
 
         {publication && <section className="settings-section panel-card creation-result"><CheckCircle2 /><div><h2>{publication.tag} published</h2><p>{publication.url || publication.message}</p></div></section>}
+
+        <section className="settings-section panel-card release-builder">
+          <div className="section-title"><BookOpen /><div><h2>Player public catalogue</h2><p>Build the exact server-free modpack list that Player downloads at startup. Drafts with catalogue visibility disabled stay private.</p></div></div>
+          <div className="safety-note publisher-safety"><FileCheck2 size={15} /> The catalogue contains public identity, version, artwork, manifest and deployment metadata only. Local folders, executables, launcher choices, arguments and installed versions are never included.</div>
+          <button className="primary-action publisher-preview" onClick={() => void prepareCatalog()} disabled={busy}>
+            {busy ? <RefreshCw className="spin" size={17} /> : <BookOpen size={17} />} Prepare public catalogue
+          </button>
+        </section>
+
+        {catalogPreview && (
+          <section className={`settings-section panel-card package-preview ${catalogPreview.ready ? "ready" : "blocked"}`}>
+            <div className="section-title">{catalogPreview.ready ? <CheckCircle2 /> : <ShieldAlert />}<div><h2>{catalogPreview.ready ? "Catalogue preview ready" : "Catalogue blocked by safety checks"}</h2><p>{catalogPreview.ready ? "Nothing has been sent to GitHub. Review the complete public profile list before confirmation." : "Fix every visible profile issue or disable its catalogue visibility, then prepare again."}</p></div></div>
+            <dl className="pack-facts preview-facts">
+              <div><dt>Destination</dt><dd>{catalogPreview.repository} · {catalogPreview.branch}</dd></div>
+              <div><dt>Visible modpacks</dt><dd>{catalogPreview.profiles.length}</dd></div>
+              <div><dt>Hidden drafts</dt><dd>{catalogPreview.hiddenProfiles}</dd></div>
+              {catalogPreview.ready && <div><dt>Catalogue</dt><dd>{formatBytes(catalogPreview.bytes)} · SHA-256 {catalogPreview.sha256.slice(0, 12)}…</dd></div>}
+              {catalogPreview.ready && <div><dt>Local preview</dt><dd title={catalogPreview.outputPath}>{catalogPreview.outputPath}</dd></div>}
+            </dl>
+            {catalogPreview.profiles.length > 0 && (
+              <div className="release-assets" aria-label="Public catalogue profiles">
+                <strong>Profiles Player will receive</strong>
+                {catalogPreview.profiles.map((item) => (
+                  <span key={item.id} title={item.manifestUrl}><b>{item.displayName}</b><small>{item.id} · v{item.version}</small></span>
+                ))}
+              </div>
+            )}
+            {catalogPreview.issues.length > 0 && <ul className="safety-issues">{catalogPreview.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>}
+            {catalogPreview.ready && (
+              <>
+                <label className="confirmation-row"><input type="checkbox" checked={catalogConfirmed} onChange={(event) => setCatalogConfirmed(event.target.checked)} /><span>I confirm replacing {catalogPreview.publicUrl} with exactly these {catalogPreview.profiles.length} reviewed public profile(s).</span></label>
+                {!status?.authenticated && <p className="publish-gate">Run Check GitHub and authenticate before catalogue publication. The local preview remains available.</p>}
+                <button className="primary-action danger-action" onClick={() => void publishCatalog()} disabled={!catalogConfirmed || !status?.authenticated || busy}>
+                  {busy ? <RefreshCw className="spin" size={17} /> : <CloudUpload size={17} />} Publish Player catalogue
+                </button>
+              </>
+            )}
+          </section>
+        )}
+
+        {catalogPublication && <section className="settings-section panel-card creation-result"><CheckCircle2 /><div><h2>Player catalogue published</h2><p>{catalogPublication.message} {catalogPublication.commitUrl || catalogPublication.publicUrl}</p></div></section>}
       </div>
     </main>
   );

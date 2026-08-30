@@ -65,6 +65,7 @@ export function ModpackManagerPanel({ games, profiles, busy, onBack, onCreate }:
       manifestUrl,
       deploymentSubdir: deploymentSubdir.trim(),
       logoPath: logoPath.trim() || "/assets/mythic-loot-logo.jpg",
+      catalogVisible: false,
     });
   }
 

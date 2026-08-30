@@ -22,6 +22,7 @@ export const testProfiles: GameProfile[] = [
       "https://github.com/HixxyDubz/Mythic-Loot-Minecraft-Modpack/releases/latest/download/minecraft_main-manifest.json",
     deploymentSubdir: "",
     logoPath: "/assets/minecraft.png",
+    catalogVisible: true,
   },
   {
     id: "seven_days_main",
@@ -42,6 +43,7 @@ export const testProfiles: GameProfile[] = [
       "https://github.com/HixxyDubz/Mythic-Loot-7DTD-Modpack/releases/latest/download/seven_days_main-manifest.json",
     deploymentSubdir: "Mods",
     logoPath: "/assets/seven-days.png",
+    catalogVisible: true,
   },
 ];
 

@@ -234,12 +234,13 @@ mod tests {
     }
 
     #[test]
-    fn existing_schema_two_profiles_gain_an_empty_minecraft_launcher() {
+    fn existing_schema_two_profiles_gain_safe_defaults_for_new_local_fields() {
         let root = tempfile::tempdir().expect("temporary directory");
         let config = LauncherConfig::default();
         let mut json = serde_json::to_value(&config).unwrap();
         for profile in json["profiles"].as_array_mut().unwrap() {
             profile.as_object_mut().unwrap().remove("minecraftLauncher");
+            profile.as_object_mut().unwrap().remove("catalogVisible");
         }
         fs::write(
             root.path().join(CONFIG_FILE),
@@ -253,6 +254,12 @@ mod tests {
                 .profiles
                 .iter()
                 .all(|profile| profile.minecraft_launcher.is_empty())
+        );
+        assert!(
+            loaded
+                .profiles
+                .iter()
+                .all(|profile| profile.catalog_visible)
         );
     }
 }

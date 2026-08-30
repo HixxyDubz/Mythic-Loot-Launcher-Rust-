@@ -2102,6 +2102,7 @@ dependencies = [
 name = "mythic-loot-launcher"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "fs2",
  "regex",
  "serde",

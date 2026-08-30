@@ -75,8 +75,11 @@ pub struct PackageAssetPreview {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReleasePublication {
+    pub profile_id: String,
+    pub version: String,
     pub repository: String,
     pub tag: String,
+    pub manifest_url: String,
     pub url: String,
     pub message: String,
 }
@@ -91,6 +94,8 @@ struct SourceFile {
 
 #[derive(Debug, Clone)]
 struct ReleasePlan {
+    profile_id: String,
+    version: String,
     repository: String,
     tag: String,
     title: String,
@@ -98,6 +103,7 @@ struct ReleasePlan {
     output_dir: PathBuf,
     assets: Vec<ReleaseAsset>,
     manifest_path: PathBuf,
+    manifest_file_name: String,
     manifest_sha256: String,
 }
 
@@ -327,6 +333,8 @@ fn prepare_at_with_limits(
 
     if remember_plan {
         let plan = ReleasePlan {
+            profile_id: profile.id.clone(),
+            version: version.clone(),
             repository: repository.into(),
             tag: tag.clone(),
             title: format!("{} {}", profile.display_name, version),
@@ -334,6 +342,7 @@ fn prepare_at_with_limits(
             output_dir,
             assets,
             manifest_path,
+            manifest_file_name: manifest_name,
             manifest_sha256,
         };
         release_plans()
@@ -412,6 +421,12 @@ pub fn publish(preview_id: &str, confirmed: bool) -> Result<ReleasePublication, 
         .map_err(|_| "Release preview cache is unavailable".to_string())?
         .remove(preview_id);
     Ok(ReleasePublication {
+        profile_id: plan.profile_id,
+        version: plan.version,
+        manifest_url: format!(
+            "https://github.com/{}/releases/latest/download/{}",
+            plan.repository, plan.manifest_file_name
+        ),
         repository: plan.repository,
         tag: plan.tag,
         url,
@@ -1054,6 +1069,7 @@ mod tests {
             manifest_url: String::new(),
             deployment_subdir: String::new(),
             logo_path: String::new(),
+            catalog_visible: true,
         }
     }
 
@@ -1284,6 +1300,8 @@ mod tests {
         fs::write(&part, b"reviewed part").unwrap();
         fs::write(&manifest_path, b"reviewed manifest").unwrap();
         let plan = ReleasePlan {
+            profile_id: "fixture".into(),
+            version: "1.0.0".into(),
             repository: "owner/repository".into(),
             tag: "v1.0.0".into(),
             title: "Fixture".into(),
@@ -1296,6 +1314,7 @@ mod tests {
                 sha256: manifest::sha256(&part).unwrap(),
             }],
             manifest_path: manifest_path.clone(),
+            manifest_file_name: "fixture-manifest.json".into(),
             manifest_sha256: manifest::sha256(&manifest_path).unwrap(),
         };
         assert!(validate_plan(&plan).is_ok());
