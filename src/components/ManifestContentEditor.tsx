@@ -13,6 +13,7 @@ interface ManifestContentEditorProps {
   manifest: ManifestSummary;
   onNotice: (message: string) => void;
   onPayload: (payload: BootstrapPayload) => void;
+  onSaved?: () => void;
 }
 
 export function ManifestContentEditor({
@@ -20,6 +21,7 @@ export function ManifestContentEditor({
   manifest,
   onNotice,
   onPayload,
+  onSaved,
 }: ManifestContentEditorProps) {
   const [draft, setDraft] = useState<ManifestContentInput>(() => fromManifest(manifest));
   const [busy, setBusy] = useState(false);
@@ -51,6 +53,7 @@ export function ManifestContentEditor({
     try {
       const result = await saveManifestContent(profileId, cleanContent(draft));
       onPayload(result.payload);
+      onSaved?.();
       onNotice(result.changed
         ? "Manifest content saved locally and will be included in the next modpack release."
         : "Manifest content already matches the saved local copy.");

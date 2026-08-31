@@ -151,6 +151,25 @@ pub fn refresh_remote(app: &AppHandle, profile: &GameProfile) -> Result<bool, St
     remote::write_atomic(&destination, &bytes)
 }
 
+#[cfg(feature = "developer")]
+pub fn store_published(
+    app: &AppHandle,
+    profile: &GameProfile,
+    bytes: &[u8],
+) -> Result<bool, String> {
+    let manifest: Manifest = serde_json::from_slice(bytes)
+        .map_err(|error| format!("Published manifest JSON is invalid: {error}"))?;
+    let errors = validate(&manifest, Some(profile));
+    if !errors.is_empty() {
+        return Err(format!(
+            "Published manifest failed local validation: {}",
+            errors.join("; ")
+        ));
+    }
+    let destination = safe_path::safe_join(&storage::data_dir(app)?, &profile.manifest_path)?;
+    remote::write_atomic(&destination, bytes)
+}
+
 fn invalid_loaded(profile: &GameProfile, error: String) -> LoadedManifest {
     LoadedManifest {
         manifest: Manifest {

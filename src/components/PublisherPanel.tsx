@@ -32,6 +32,7 @@ import type {
   ManifestSummary,
 } from "../types";
 import { ManifestContentEditor } from "./ManifestContentEditor";
+import { ManifestContentPublisher } from "./ManifestContentPublisher";
 
 interface PublisherPanelProps {
   profile: GameProfile;
@@ -60,6 +61,7 @@ export function PublisherPanel({ profile, manifest, onBack, onNotice, onPayload 
   const [catalogPreview, setCatalogPreview] = useState<CatalogPreview | null>(null);
   const [catalogConfirmed, setCatalogConfirmed] = useState(false);
   const [catalogPublication, setCatalogPublication] = useState<CatalogPublication | null>(null);
+  const [contentRevision, setContentRevision] = useState(0);
 
   function invalidateRelease() {
     setReleasePreview(null);
@@ -207,6 +209,14 @@ export function PublisherPanel({ profile, manifest, onBack, onNotice, onPayload 
           manifest={manifest}
           onNotice={onNotice}
           onPayload={onPayload}
+          onSaved={() => setContentRevision((current) => current + 1)}
+        />
+
+        <ManifestContentPublisher
+          key={contentRevision}
+          profileId={profile.id}
+          githubAuthenticated={Boolean(status?.authenticated)}
+          onNotice={onNotice}
         />
 
         <section className="settings-section panel-card">

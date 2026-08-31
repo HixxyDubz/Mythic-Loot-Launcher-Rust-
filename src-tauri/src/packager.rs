@@ -84,6 +84,12 @@ pub struct ReleasePublication {
     pub message: String,
 }
 
+#[derive(Debug)]
+pub struct PublishedRelease {
+    pub publication: ReleasePublication,
+    pub manifest_bytes: Vec<u8>,
+}
+
 #[derive(Debug, Clone)]
 struct SourceFile {
     absolute: PathBuf,
@@ -353,7 +359,7 @@ fn prepare_at_with_limits(
     Ok(preview)
 }
 
-pub fn publish(preview_id: &str, confirmed: bool) -> Result<ReleasePublication, String> {
+pub fn publish(preview_id: &str, confirmed: bool) -> Result<PublishedRelease, String> {
     if !confirmed {
         return Err("Release publication requires explicit confirmation".into());
     }
@@ -364,6 +370,8 @@ pub fn publish(preview_id: &str, confirmed: bool) -> Result<ReleasePublication, 
         .cloned()
         .ok_or_else(|| "Prepare a fresh local release preview before publishing".to_string())?;
     validate_plan(&plan)?;
+    let manifest_bytes = fs::read(&plan.manifest_path)
+        .map_err(|error| format!("Could not reopen the reviewed manifest: {error}"))?;
 
     let status = publisher::status();
     if !status.gh_available || !status.authenticated {
@@ -420,20 +428,23 @@ pub fn publish(preview_id: &str, confirmed: bool) -> Result<ReleasePublication, 
         .lock()
         .map_err(|_| "Release preview cache is unavailable".to_string())?
         .remove(preview_id);
-    Ok(ReleasePublication {
-        profile_id: plan.profile_id,
-        version: plan.version,
-        manifest_url: format!(
-            "https://github.com/{}/releases/latest/download/{}",
-            plan.repository, plan.manifest_file_name
-        ),
-        repository: plan.repository,
-        tag: plan.tag,
-        url,
-        message: format!(
-            "GitHub Release created with {} reviewed package asset(s) and the manifest.",
-            plan.assets.len()
-        ),
+    Ok(PublishedRelease {
+        publication: ReleasePublication {
+            profile_id: plan.profile_id,
+            version: plan.version,
+            manifest_url: format!(
+                "https://github.com/{}/releases/latest/download/{}",
+                plan.repository, plan.manifest_file_name
+            ),
+            repository: plan.repository,
+            tag: plan.tag,
+            url,
+            message: format!(
+                "GitHub Release created with {} reviewed package asset(s) and the manifest.",
+                plan.assets.len()
+            ),
+        },
+        manifest_bytes,
     })
 }
 

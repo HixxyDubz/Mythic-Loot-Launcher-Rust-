@@ -97,6 +97,33 @@ export interface ManifestContentSaveOutcome {
   payload: BootstrapPayload;
 }
 
+export interface ContentReleasePreview {
+  previewId: string;
+  profileId: string;
+  repository: string;
+  tag: string;
+  manifestUrl: string;
+  manifestPath: string;
+  modpackVersion: string;
+  bytes: number;
+  sha256: string;
+  packageAssetsPreserved: number;
+  requiredFileCount: number;
+  rulesCount: number;
+  changelogCount: number;
+  issues: string[];
+  ready: boolean;
+}
+
+export interface ContentReleasePublication {
+  profileId: string;
+  repository: string;
+  tag: string;
+  manifestUrl: string;
+  url: string;
+  message: string;
+}
+
 export interface FileVerification {
   profileId: string;
   checked: number;

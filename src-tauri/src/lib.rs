@@ -3,6 +3,8 @@ mod catalog;
 mod catalog_publisher;
 #[cfg(feature = "developer")]
 mod content_editor;
+#[cfg(feature = "developer")]
+mod content_publisher;
 mod detection;
 mod launch;
 mod manifest;
@@ -36,6 +38,8 @@ use updater::{TransactionOutcome, TransactionPreview, TransactionRequest};
 use catalog_publisher::{CatalogPreview, CatalogPublication};
 #[cfg(feature = "developer")]
 use content_editor::ManifestContentInput;
+#[cfg(feature = "developer")]
+use content_publisher::{ContentReleasePreview, ContentReleasePublication};
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -304,9 +308,27 @@ async fn publish_modpack_release(
     confirmed: bool,
 ) -> Result<ModpackPublicationOutcome, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let publication = packager::publish(&preview_id, confirmed)?;
+        let published = packager::publish(&preview_id, confirmed)?;
+        let publication = published.publication;
         let mut config = storage::load_or_create(&app)?;
         apply_release_publication(&mut config, &publication)?;
+        let profile = config
+            .profiles
+            .iter()
+            .find(|profile| profile.id == publication.profile_id)
+            .cloned()
+            .ok_or_else(|| {
+                format!(
+                    "Release {} was published, but its local modpack profile is no longer available",
+                    publication.tag
+                )
+            })?;
+        manifest::store_published(&app, &profile, &published.manifest_bytes).map_err(|error| {
+            format!(
+                "Release {} was published, but its trusted manifest could not be activated locally: {error}",
+                publication.tag
+            )
+        })?;
         storage::save(&app, &config).map_err(|error| {
             format!(
                 "Release {} was published, but the local profile could not be updated: {error}",
@@ -339,6 +361,28 @@ async fn publish_public_catalog(
     tauri::async_runtime::spawn_blocking(move || catalog_publisher::publish(&preview_id, confirmed))
         .await
         .map_err(|error| format!("Public catalogue publication task failed: {error}"))?
+}
+
+#[tauri::command]
+#[cfg(feature = "developer")]
+async fn prepare_manifest_content_release(
+    app: AppHandle,
+    profile_id: String,
+) -> Result<ContentReleasePreview, String> {
+    tauri::async_runtime::spawn_blocking(move || content_publisher::prepare(&app, &profile_id))
+        .await
+        .map_err(|error| format!("Content release preparation task failed: {error}"))?
+}
+
+#[tauri::command]
+#[cfg(feature = "developer")]
+async fn publish_manifest_content_release(
+    preview_id: String,
+    confirmed: bool,
+) -> Result<ContentReleasePublication, String> {
+    tauri::async_runtime::spawn_blocking(move || content_publisher::publish(&preview_id, confirmed))
+        .await
+        .map_err(|error| format!("Content release publication task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -506,6 +550,8 @@ pub fn run() {
         publish_modpack_release,
         prepare_public_catalog,
         publish_public_catalog,
+        prepare_manifest_content_release,
+        publish_manifest_content_release,
         prepare_modpack_transaction,
         apply_modpack_transaction,
         list_restore_points,

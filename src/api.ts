@@ -4,6 +4,8 @@ import type {
   CatalogPreview,
   CatalogPublication,
   CatalogRefreshOutcome,
+  ContentReleasePreview,
+  ContentReleasePublication,
   DetectedInstall,
   FileVerification,
   GameProfile,
@@ -63,6 +65,19 @@ export async function saveManifestContent(
 ): Promise<ManifestContentSaveOutcome> {
   requireNative("Manifest content saving");
   return invoke<ManifestContentSaveOutcome>("save_manifest_content", { profileId, content });
+}
+
+export async function prepareManifestContentRelease(profileId: string): Promise<ContentReleasePreview> {
+  requireNative("Content-only release preparation");
+  return invoke<ContentReleasePreview>("prepare_manifest_content_release", { profileId });
+}
+
+export async function publishManifestContentRelease(
+  previewId: string,
+  confirmed: boolean,
+): Promise<ContentReleasePublication> {
+  requireNative("Content-only release publication");
+  return invoke<ContentReleasePublication>("publish_manifest_content_release", { previewId, confirmed });
 }
 
 export async function detectInstallations(profile: GameProfile): Promise<DetectedInstall[]> {
