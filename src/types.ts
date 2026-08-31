@@ -154,6 +154,7 @@ export interface CatalogRefreshOutcome {
 
 export type ActivityKind =
   | "catalogue"
+  | "storage"
   | "verifying"
   | "updating"
   | "repairing"
@@ -174,6 +175,43 @@ export interface ActivityItem {
   updatedAt: number;
   done: boolean;
   success: boolean | null;
+}
+
+export type StorageCleanupKind = "oldBackups" | "metadataCache" | "temporaryWork";
+
+export interface StorageBucket {
+  key: string;
+  label: string;
+  category: string;
+  path: string;
+  bytesUsed: number;
+  fileCount: number;
+  directoryCount: number;
+  exists: boolean;
+  truncated: boolean;
+  cleanupKind: StorageCleanupKind | null;
+}
+
+export interface StorageReport {
+  dataDir: string;
+  launcherBytes: number;
+  profileBytes: number;
+  measuredAt: number;
+  temporaryRetentionHours: number;
+  backupsKeptPerProfile: number;
+  buckets: StorageBucket[];
+  issues: string[];
+  truncated: boolean;
+}
+
+export interface StorageCleanupOutcome {
+  kind: StorageCleanupKind;
+  deletedEntries: number;
+  reclaimedBytes: number;
+  skippedEntries: number;
+  complete: boolean;
+  message: string;
+  report: StorageReport;
 }
 
 export interface DetectedInstall {

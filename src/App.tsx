@@ -8,13 +8,14 @@ import { SafeLaunchPanel } from "./components/SafeLaunchPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { Sidebar } from "./components/Sidebar";
 import { SmartLaunchPanel } from "./components/SmartLaunchPanel";
+import { StoragePanel } from "./components/StoragePanel";
 import { TitleBar } from "./components/TitleBar";
 import { UpdatePanel } from "./components/UpdatePanel";
 import type { BootstrapPayload, DetectedInstall, FileVerification, GameProfile } from "./types";
 
 function App() {
   const [payload, setPayload] = useState<BootstrapPayload | null>(null);
-  const [page, setPage] = useState<"dashboard" | "activity" | "settings" | "modpacks" | "publisher" | "update" | "safeLaunch" | "smartLaunch">("dashboard");
+  const [page, setPage] = useState<"dashboard" | "activity" | "storage" | "settings" | "modpacks" | "publisher" | "update" | "safeLaunch" | "smartLaunch">("dashboard");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [fatalError, setFatalError] = useState("");
@@ -165,12 +166,15 @@ function App() {
             onSelect={(id) => void chooseProfile(id)}
             onSettings={() => setPage("settings")}
             onActivity={() => setPage("activity")}
+            onStorage={() => setPage("storage")}
             onPublisher={() => setPage("publisher")}
             onAddModpack={() => setPage("modpacks")}
           />
           <div className="content-region">
             {page === "activity" ? (
               <ActivityPanel onBack={() => setPage("dashboard")} onNotice={setNotice} />
+            ) : page === "storage" ? (
+              <StoragePanel onBack={() => setPage("dashboard")} onNotice={setNotice} />
             ) : publisherAvailable && page === "modpacks" ? (
               <EditionModpackManagerPanel
                 games={payload.games}

@@ -27,6 +27,9 @@ import type {
   SafeLaunchOutcome,
   SafeLaunchRecovery,
   SafeLaunchStatus,
+  StorageCleanupKind,
+  StorageCleanupOutcome,
+  StorageReport,
   TransactionOutcome,
   TransactionPreview,
   TransactionRequest,
@@ -53,6 +56,19 @@ export async function listActivity(): Promise<ActivityItem[]> {
 export async function clearFinishedActivity(): Promise<ActivityItem[]> {
   requireNative("Activity history cleanup");
   return invoke<ActivityItem[]>("clear_finished_activity");
+}
+
+export async function getStorageReport(): Promise<StorageReport> {
+  requireNative("Storage report");
+  return invoke<StorageReport>("get_storage_report");
+}
+
+export async function cleanStorage(
+  kind: StorageCleanupKind,
+  confirmed: boolean,
+): Promise<StorageCleanupOutcome> {
+  requireNative("Storage cleanup");
+  return invoke<StorageCleanupOutcome>("clean_storage", { kind, confirmed });
 }
 
 export async function refreshPublicCatalog(): Promise<CatalogRefreshOutcome> {

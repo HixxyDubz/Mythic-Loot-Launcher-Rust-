@@ -24,6 +24,7 @@ const RECENT_ITEMS: usize = 12;
 #[serde(rename_all = "camelCase")]
 pub enum ActivityKind {
     Catalogue,
+    Storage,
     Verifying,
     Updating,
     Repairing,
@@ -76,6 +77,10 @@ pub fn recent(app: &AppHandle) -> Result<Vec<ActivityItem>, String> {
 
 pub fn clear_finished(app: &AppHandle) -> Result<Vec<ActivityItem>, String> {
     clear_finished_at(&activity_path(app)?, session_id())
+}
+
+pub fn has_active(app: &AppHandle) -> Result<bool, String> {
+    has_active_at(&activity_path(app)?, session_id())
 }
 
 pub fn track<T, F, D>(
@@ -221,6 +226,18 @@ fn clear_finished_at(path: &Path, current_session: &str) -> Result<Vec<ActivityI
             .sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
         Ok(store.items.iter().take(RECENT_ITEMS).cloned().collect())
     })
+}
+
+fn has_active_at(path: &Path, current_session: &str) -> Result<bool, String> {
+    let _guard = history_lock()
+        .lock()
+        .map_err(|_| "Activity history lock is unavailable".to_string())?;
+    let (store, changed) = load_store(path, current_session)?;
+    let active = store.items.iter().any(|item| !item.done);
+    if changed {
+        save_store(path, &store)?;
+    }
+    Ok(active)
 }
 
 fn with_store<T>(

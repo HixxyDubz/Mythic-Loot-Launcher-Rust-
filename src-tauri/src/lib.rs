@@ -21,6 +21,7 @@ mod restore_points;
 mod safe_launch;
 mod safe_path;
 mod storage;
+mod storage_maintenance;
 mod updater;
 
 use activity::{ActivityItem, ActivityKind};
@@ -33,6 +34,7 @@ use packager::{PackagePreview, PackageRequest, ReleasePublication};
 use publisher::{PublisherStatus, RepositoryCreation, RepositoryRequest};
 use restore_points::{RestoreOutcome, RestorePointSummary, RestorePreview};
 use safe_launch::{SafeLaunchOutcome, SafeLaunchRecovery, SafeLaunchStatus};
+use storage_maintenance::{StorageCleanupKind, StorageCleanupOutcome, StorageReport};
 use tauri::{AppHandle, Manager};
 use updater::{TransactionOutcome, TransactionPreview, TransactionRequest};
 
@@ -154,6 +156,53 @@ fn list_activity(app: AppHandle) -> Result<Vec<ActivityItem>, String> {
 #[tauri::command]
 fn clear_finished_activity(app: AppHandle) -> Result<Vec<ActivityItem>, String> {
     activity::clear_finished(&app)
+}
+
+#[tauri::command]
+async fn get_storage_report(app: AppHandle) -> Result<StorageReport, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        activity::track(
+            &app,
+            "Launcher storage report",
+            ActivityKind::Storage,
+            "Measuring launcher-owned and configured modpack storage",
+            || storage_maintenance::report(&app),
+            |report| {
+                (
+                    true,
+                    format!(
+                        "Storage report ready: {} launcher bytes and {} configured modpack bytes",
+                        report.launcher_bytes, report.profile_bytes
+                    ),
+                )
+            },
+        )
+    })
+    .await
+    .map_err(|error| format!("Storage report task failed: {error}"))?
+}
+
+#[tauri::command]
+async fn clean_storage(
+    app: AppHandle,
+    kind: StorageCleanupKind,
+    confirmed: bool,
+) -> Result<StorageCleanupOutcome, String> {
+    if activity::has_active(&app)? {
+        return Err("Wait for current launcher activity to finish before cleaning storage".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        activity::track(
+            &app,
+            "Launcher storage cleanup",
+            ActivityKind::Storage,
+            "Cleaning the confirmed launcher-owned storage category",
+            || storage_maintenance::clean(&app, kind, confirmed),
+            |outcome| (outcome.complete, outcome.message.clone()),
+        )
+    })
+    .await
+    .map_err(|error| format!("Storage cleanup task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -808,6 +857,8 @@ pub fn run() {
         bootstrap,
         list_activity,
         clear_finished_activity,
+        get_storage_report,
+        clean_storage,
         refresh_public_catalog,
         select_profile,
         save_profile,
@@ -840,6 +891,8 @@ pub fn run() {
         bootstrap,
         list_activity,
         clear_finished_activity,
+        get_storage_report,
+        clean_storage,
         refresh_public_catalog,
         select_profile,
         save_profile,

@@ -12,6 +12,7 @@ import {
   RefreshCw,
   RotateCcw,
   SearchCheck,
+  HardDrive,
   Trash2,
   Wrench,
 } from "lucide-react";
@@ -130,6 +131,7 @@ function ActivityRow({ item }: { item: ActivityItem }) {
 function kindIcon(kind: ActivityKind) {
   switch (kind) {
     case "catalogue": return Download;
+    case "storage": return HardDrive;
     case "verifying": return SearchCheck;
     case "updating": return HardDriveDownload;
     case "repairing": return Wrench;
@@ -143,6 +145,7 @@ function kindIcon(kind: ActivityKind) {
 function kindLabel(kind: ActivityKind): string {
   switch (kind) {
     case "catalogue": return "Catalogue";
+    case "storage": return "Storage";
     case "verifying": return "Verifying";
     case "updating": return "Updating";
     case "repairing": return "Repairing";

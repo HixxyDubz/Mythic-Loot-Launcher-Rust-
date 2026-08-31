@@ -1,4 +1,4 @@
-import { Activity, ChevronRight, CloudUpload, Gamepad2, Plus, Settings } from "lucide-react";
+import { Activity, ChevronRight, CloudUpload, Gamepad2, HardDrive, Plus, Settings } from "lucide-react";
 import type { GameProfile, ProfileHealth } from "../types";
 
 interface SidebarProps {
@@ -10,11 +10,12 @@ interface SidebarProps {
   onSelect: (id: string) => void;
   onSettings: () => void;
   onActivity: () => void;
+  onStorage: () => void;
   onPublisher: () => void;
   onAddModpack: () => void;
 }
 
-export function Sidebar({ profiles, health, selectedId, edition, publisherAvailable, onSelect, onSettings, onActivity, onPublisher, onAddModpack }: SidebarProps) {
+export function Sidebar({ profiles, health, selectedId, edition, publisherAvailable, onSelect, onSettings, onActivity, onStorage, onPublisher, onAddModpack }: SidebarProps) {
   return (
     <aside className="sidebar">
       <div className="brand-lockup">
@@ -58,6 +59,9 @@ export function Sidebar({ profiles, health, selectedId, edition, publisherAvaila
       <div className="sidebar-footer">
         <button onClick={onActivity}>
           <Activity size={17} /> Activity
+        </button>
+        <button onClick={onStorage}>
+          <HardDrive size={17} /> Storage
         </button>
         {publisherAvailable && (
           <button onClick={onPublisher}>
