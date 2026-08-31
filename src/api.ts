@@ -1,5 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import type {
+  ActivityItem,
   BootstrapPayload,
   CatalogPreview,
   CatalogPublication,
@@ -42,6 +43,16 @@ function requireNative(operation: string): void {
 export async function bootstrap(): Promise<BootstrapPayload> {
   requireNative("Launcher startup");
   return invoke<BootstrapPayload>("bootstrap");
+}
+
+export async function listActivity(): Promise<ActivityItem[]> {
+  requireNative("Activity history");
+  return invoke<ActivityItem[]>("list_activity");
+}
+
+export async function clearFinishedActivity(): Promise<ActivityItem[]> {
+  requireNative("Activity history cleanup");
+  return invoke<ActivityItem[]>("clear_finished_activity");
 }
 
 export async function refreshPublicCatalog(): Promise<CatalogRefreshOutcome> {

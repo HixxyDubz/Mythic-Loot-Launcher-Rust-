@@ -1,4 +1,4 @@
-import { ChevronRight, CloudUpload, Gamepad2, Plus, Settings } from "lucide-react";
+import { Activity, ChevronRight, CloudUpload, Gamepad2, Plus, Settings } from "lucide-react";
 import type { GameProfile, ProfileHealth } from "../types";
 
 interface SidebarProps {
@@ -9,11 +9,12 @@ interface SidebarProps {
   publisherAvailable: boolean;
   onSelect: (id: string) => void;
   onSettings: () => void;
+  onActivity: () => void;
   onPublisher: () => void;
   onAddModpack: () => void;
 }
 
-export function Sidebar({ profiles, health, selectedId, edition, publisherAvailable, onSelect, onSettings, onPublisher, onAddModpack }: SidebarProps) {
+export function Sidebar({ profiles, health, selectedId, edition, publisherAvailable, onSelect, onSettings, onActivity, onPublisher, onAddModpack }: SidebarProps) {
   return (
     <aside className="sidebar">
       <div className="brand-lockup">
@@ -55,6 +56,9 @@ export function Sidebar({ profiles, health, selectedId, edition, publisherAvaila
         </button>
       )}
       <div className="sidebar-footer">
+        <button onClick={onActivity}>
+          <Activity size={17} /> Activity
+        </button>
         {publisherAvailable && (
           <button onClick={onPublisher}>
             <CloudUpload size={17} /> Publisher

@@ -152,6 +152,30 @@ export interface CatalogRefreshOutcome {
   };
 }
 
+export type ActivityKind =
+  | "catalogue"
+  | "verifying"
+  | "updating"
+  | "repairing"
+  | "restoring"
+  | "publishing"
+  | "launching"
+  | "setup";
+
+export interface ActivityItem {
+  id: string;
+  title: string;
+  kind: ActivityKind;
+  message: string;
+  progress: number | null;
+  bytesDone: number | null;
+  bytesTotal: number | null;
+  startedAt: number;
+  updatedAt: number;
+  done: boolean;
+  success: boolean | null;
+}
+
 export interface DetectedInstall {
   label: string;
   exePath: string | null;

@@ -71,11 +71,24 @@ try {
             if (-not $configCreated) {
                 throw "$($edition.Name) did not create isolated launcher configuration"
             }
+            $activityPath = Join-Path $dataRoot "activity-history.json"
+            $activityDeadline = [DateTime]::UtcNow.AddSeconds(25)
+            do {
+                $activityCreated = Test-Path -LiteralPath $activityPath -PathType Leaf
+                if (-not $activityCreated) {
+                    Start-Sleep -Milliseconds 250
+                    $process.Refresh()
+                }
+            } while (-not $activityCreated -and -not $process.HasExited -and [DateTime]::UtcNow -lt $activityDeadline)
+            if (-not $activityCreated) {
+                throw "$($edition.Name) did not record packaged native startup activity"
+            }
             $results += [pscustomobject]@{
                 Edition = $edition.Name
                 Handle = $process.MainWindowHandle
                 Title = $process.MainWindowTitle
                 ConfigCreated = $configCreated
+                ActivityCreated = $activityCreated
             }
         }
         finally {
@@ -95,4 +108,4 @@ finally {
 }
 
 $results | Format-Table -AutoSize
-Write-Host "Both portable Windows editions passed isolated responsive-window smoke acceptance."
+Write-Host "Both portable Windows editions passed isolated responsive-window and native-activity smoke acceptance."

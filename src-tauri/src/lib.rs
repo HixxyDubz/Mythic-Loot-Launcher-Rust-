@@ -1,3 +1,4 @@
+mod activity;
 mod catalog;
 #[cfg(feature = "developer")]
 mod catalog_publisher;
@@ -22,6 +23,7 @@ mod safe_path;
 mod storage;
 mod updater;
 
+use activity::{ActivityItem, ActivityKind};
 use manifest::FileVerification;
 use minecraft_setup::{MinecraftBootstrapArtifact, MinecraftBootstrapRequest};
 use models::{BootstrapPayload, DetectedInstall, GameProfile, LaunchOutcome, ReadinessStatus};
@@ -120,11 +122,20 @@ fn payload(app: &AppHandle) -> Result<BootstrapPayload, String> {
 #[tauri::command]
 async fn refresh_public_catalog(app: AppHandle) -> Result<CatalogRefreshOutcome, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let summary = catalog::refresh(&app)?;
-        Ok(CatalogRefreshOutcome {
-            payload: payload(&app)?,
-            summary,
-        })
+        activity::track(
+            &app,
+            "Public modpack catalogue",
+            ActivityKind::Catalogue,
+            "Checking for catalogue and manifest changes",
+            || {
+                let summary = catalog::refresh(&app)?;
+                Ok(CatalogRefreshOutcome {
+                    payload: payload(&app)?,
+                    summary,
+                })
+            },
+            |outcome| (true, outcome.summary.message.clone()),
+        )
     })
     .await
     .map_err(|error| format!("Public catalogue refresh task failed: {error}"))?
@@ -133,6 +144,16 @@ async fn refresh_public_catalog(app: AppHandle) -> Result<CatalogRefreshOutcome,
 #[tauri::command]
 fn bootstrap(app: AppHandle) -> Result<BootstrapPayload, String> {
     payload(&app)
+}
+
+#[tauri::command]
+fn list_activity(app: AppHandle) -> Result<Vec<ActivityItem>, String> {
+    activity::recent(&app)
+}
+
+#[tauri::command]
+fn clear_finished_activity(app: AppHandle) -> Result<Vec<ActivityItem>, String> {
+    activity::clear_finished(&app)
 }
 
 #[tauri::command]
@@ -266,9 +287,19 @@ async fn prepare_minecraft_bootstrap(
     app: AppHandle,
     request: MinecraftBootstrapRequest,
 ) -> Result<MinecraftBootstrapArtifact, String> {
-    tauri::async_runtime::spawn_blocking(move || minecraft_setup::prepare(&app, &request))
-        .await
-        .map_err(|error| format!("Minecraft bootstrap task failed: {error}"))?
+    let title = format!("{} launcher profile", request.profile_id);
+    tauri::async_runtime::spawn_blocking(move || {
+        activity::track(
+            &app,
+            title,
+            ActivityKind::Setup,
+            "Preparing launcher import",
+            || minecraft_setup::prepare(&app, &request),
+            |artifact| (true, artifact.message.clone()),
+        )
+    })
+    .await
+    .map_err(|error| format!("Minecraft bootstrap task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -282,11 +313,22 @@ async fn github_publisher_status() -> Result<PublisherStatus, String> {
 #[tauri::command]
 #[cfg(feature = "developer")]
 async fn create_github_repository(
+    app: AppHandle,
     request: RepositoryRequest,
 ) -> Result<RepositoryCreation, String> {
-    tauri::async_runtime::spawn_blocking(move || publisher::create_repository(&request))
-        .await
-        .map_err(|error| format!("GitHub repository task failed: {error}"))?
+    let title = format!("GitHub repository {}", request.repository);
+    tauri::async_runtime::spawn_blocking(move || {
+        activity::track(
+            &app,
+            title,
+            ActivityKind::Publishing,
+            "Creating repository",
+            || publisher::create_repository(&request),
+            |creation| (true, creation.message.clone()),
+        )
+    })
+    .await
+    .map_err(|error| format!("GitHub repository task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -295,9 +337,38 @@ async fn prepare_modpack_release(
     app: AppHandle,
     request: PackageRequest,
 ) -> Result<PackagePreview, String> {
-    tauri::async_runtime::spawn_blocking(move || packager::prepare(&app, &request))
-        .await
-        .map_err(|error| format!("Modpack packaging task failed: {error}"))?
+    let title = format!("{} release", request.profile_id);
+    tauri::async_runtime::spawn_blocking(move || {
+        activity::track(
+            &app,
+            title,
+            ActivityKind::Verifying,
+            "Scanning and packaging the modpack source",
+            || packager::prepare(&app, &request),
+            |preview| {
+                if preview.ready {
+                    (
+                        true,
+                        format!(
+                            "Release preview ready with {} files and {} package asset(s)",
+                            preview.file_count,
+                            preview.assets.len()
+                        ),
+                    )
+                } else {
+                    (
+                        false,
+                        format!(
+                            "Release preview blocked by {} safety issue(s)",
+                            preview.issues.len()
+                        ),
+                    )
+                }
+            },
+        )
+    })
+    .await
+    .map_err(|error| format!("Modpack packaging task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -308,37 +379,48 @@ async fn publish_modpack_release(
     confirmed: bool,
 ) -> Result<ModpackPublicationOutcome, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let published = packager::publish(&preview_id, confirmed)?;
-        let publication = published.publication;
-        let mut config = storage::load_or_create(&app)?;
-        apply_release_publication(&mut config, &publication)?;
-        let profile = config
-            .profiles
-            .iter()
-            .find(|profile| profile.id == publication.profile_id)
-            .cloned()
-            .ok_or_else(|| {
-                format!(
-                    "Release {} was published, but its local modpack profile is no longer available",
-                    publication.tag
-                )
-            })?;
-        manifest::store_published(&app, &profile, &published.manifest_bytes).map_err(|error| {
-            format!(
-                "Release {} was published, but its trusted manifest could not be activated locally: {error}",
-                publication.tag
-            )
-        })?;
-        storage::save(&app, &config).map_err(|error| {
-            format!(
-                "Release {} was published, but the local profile could not be updated: {error}",
-                publication.tag
-            )
-        })?;
-        Ok(ModpackPublicationOutcome {
-            publication,
-            payload: payload(&app)?,
-        })
+        activity::track(
+            &app,
+            "Modpack GitHub release",
+            ActivityKind::Publishing,
+            "Publishing reviewed package assets and manifest",
+            || {
+                let published = packager::publish(&preview_id, confirmed)?;
+                let publication = published.publication;
+                let mut config = storage::load_or_create(&app)?;
+                apply_release_publication(&mut config, &publication)?;
+                let profile = config
+                    .profiles
+                    .iter()
+                    .find(|profile| profile.id == publication.profile_id)
+                    .cloned()
+                    .ok_or_else(|| {
+                        format!(
+                            "Release {} was published, but its local modpack profile is no longer available",
+                            publication.tag
+                        )
+                    })?;
+                manifest::store_published(&app, &profile, &published.manifest_bytes).map_err(
+                    |error| {
+                        format!(
+                            "Release {} was published, but its trusted manifest could not be activated locally: {error}",
+                            publication.tag
+                        )
+                    },
+                )?;
+                storage::save(&app, &config).map_err(|error| {
+                    format!(
+                        "Release {} was published, but the local profile could not be updated: {error}",
+                        publication.tag
+                    )
+                })?;
+                Ok(ModpackPublicationOutcome {
+                    publication,
+                    payload: payload(&app)?,
+                })
+            },
+            |outcome| (true, outcome.publication.message.clone()),
+        )
     })
     .await
     .map_err(|error| format!("GitHub release task failed: {error}"))?
@@ -347,20 +429,54 @@ async fn publish_modpack_release(
 #[tauri::command]
 #[cfg(feature = "developer")]
 async fn prepare_public_catalog(app: AppHandle) -> Result<CatalogPreview, String> {
-    tauri::async_runtime::spawn_blocking(move || catalog_publisher::prepare(&app))
-        .await
-        .map_err(|error| format!("Public catalogue preparation task failed: {error}"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        activity::track(
+            &app,
+            "Player public catalogue",
+            ActivityKind::Verifying,
+            "Preparing public catalogue preview",
+            || catalog_publisher::prepare(&app),
+            |preview| {
+                if preview.ready {
+                    (
+                        true,
+                        format!(
+                            "Catalogue preview ready with {} profiles",
+                            preview.profiles.len()
+                        ),
+                    )
+                } else {
+                    (
+                        false,
+                        format!("Catalogue blocked by {} issue(s)", preview.issues.len()),
+                    )
+                }
+            },
+        )
+    })
+    .await
+    .map_err(|error| format!("Public catalogue preparation task failed: {error}"))?
 }
 
 #[tauri::command]
 #[cfg(feature = "developer")]
 async fn publish_public_catalog(
+    app: AppHandle,
     preview_id: String,
     confirmed: bool,
 ) -> Result<CatalogPublication, String> {
-    tauri::async_runtime::spawn_blocking(move || catalog_publisher::publish(&preview_id, confirmed))
-        .await
-        .map_err(|error| format!("Public catalogue publication task failed: {error}"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        activity::track(
+            &app,
+            "Player public catalogue",
+            ActivityKind::Publishing,
+            "Publishing the reviewed catalogue",
+            || catalog_publisher::publish(&preview_id, confirmed),
+            |publication| (true, publication.message.clone()),
+        )
+    })
+    .await
+    .map_err(|error| format!("Public catalogue publication task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -369,20 +485,52 @@ async fn prepare_manifest_content_release(
     app: AppHandle,
     profile_id: String,
 ) -> Result<ContentReleasePreview, String> {
-    tauri::async_runtime::spawn_blocking(move || content_publisher::prepare(&app, &profile_id))
-        .await
-        .map_err(|error| format!("Content release preparation task failed: {error}"))?
+    let title = format!("{profile_id} content release");
+    tauri::async_runtime::spawn_blocking(move || {
+        activity::track(
+            &app,
+            title,
+            ActivityKind::Verifying,
+            "Preparing manifest-only release",
+            || content_publisher::prepare(&app, &profile_id),
+            |preview| {
+                if preview.ready {
+                    (true, "Content-only release preview ready".into())
+                } else {
+                    (
+                        false,
+                        format!(
+                            "Content release blocked by {} issue(s)",
+                            preview.issues.len()
+                        ),
+                    )
+                }
+            },
+        )
+    })
+    .await
+    .map_err(|error| format!("Content release preparation task failed: {error}"))?
 }
 
 #[tauri::command]
 #[cfg(feature = "developer")]
 async fn publish_manifest_content_release(
+    app: AppHandle,
     preview_id: String,
     confirmed: bool,
 ) -> Result<ContentReleasePublication, String> {
-    tauri::async_runtime::spawn_blocking(move || content_publisher::publish(&preview_id, confirmed))
-        .await
-        .map_err(|error| format!("Content release publication task failed: {error}"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        activity::track(
+            &app,
+            "Manifest-only GitHub release",
+            ActivityKind::Publishing,
+            "Publishing the reviewed manifest without package assets",
+            || content_publisher::publish(&preview_id, confirmed),
+            |publication| (true, publication.message.clone()),
+        )
+    })
+    .await
+    .map_err(|error| format!("Content release publication task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -390,9 +538,28 @@ async fn prepare_modpack_transaction(
     app: AppHandle,
     request: TransactionRequest,
 ) -> Result<TransactionPreview, String> {
-    tauri::async_runtime::spawn_blocking(move || updater::prepare(&app, &request))
-        .await
-        .map_err(|error| format!("Modpack staging task failed: {error}"))?
+    let activity_kind = match request.kind {
+        updater::TransactionKind::Update => ActivityKind::Updating,
+        updater::TransactionKind::Repair => ActivityKind::Repairing,
+    };
+    let title = format!("{} modpack", request.profile_id);
+    tauri::async_runtime::spawn_blocking(move || {
+        activity::track(
+            &app,
+            title,
+            activity_kind,
+            "Downloading, staging and verifying trusted files",
+            || updater::prepare(&app, &request),
+            |preview| {
+                (
+                    preview.ready || preview.nothing_to_do,
+                    preview.message.clone(),
+                )
+            },
+        )
+    })
+    .await
+    .map_err(|error| format!("Modpack staging task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -401,9 +568,29 @@ async fn apply_modpack_transaction(
     preview_id: String,
     confirmed: bool,
 ) -> Result<TransactionOutcome, String> {
-    tauri::async_runtime::spawn_blocking(move || updater::apply(&app, &preview_id, confirmed))
-        .await
-        .map_err(|error| format!("Modpack transaction task failed: {error}"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        activity::track(
+            &app,
+            "Modpack update or repair",
+            ActivityKind::Updating,
+            "Backing up and applying reviewed files",
+            || updater::apply(&app, &preview_id, confirmed),
+            |outcome| {
+                (
+                    outcome.success,
+                    if outcome.success {
+                        outcome.message.clone()
+                    } else if !outcome.error.is_empty() {
+                        outcome.error.clone()
+                    } else {
+                        outcome.message.clone()
+                    },
+                )
+            },
+        )
+    })
+    .await
+    .map_err(|error| format!("Modpack transaction task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -420,8 +607,16 @@ async fn prepare_restore_point(
     profile_id: String,
     backup_id: String,
 ) -> Result<RestorePreview, String> {
+    let title = format!("{profile_id} restore point");
     tauri::async_runtime::spawn_blocking(move || {
-        restore_points::prepare(&app, &profile_id, &backup_id)
+        activity::track(
+            &app,
+            title,
+            ActivityKind::Restoring,
+            "Staging and verifying the selected restore point",
+            || restore_points::prepare(&app, &profile_id, &backup_id),
+            |preview| (preview.ready, preview.message.clone()),
+        )
     })
     .await
     .map_err(|error| format!("Restore staging task failed: {error}"))?
@@ -434,7 +629,25 @@ async fn apply_restore_point(
     confirmed: bool,
 ) -> Result<RestoreOutcome, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        restore_points::apply(&app, &preview_id, confirmed)
+        activity::track(
+            &app,
+            "Modpack restore",
+            ActivityKind::Restoring,
+            "Backing up current files and restoring the reviewed point",
+            || restore_points::apply(&app, &preview_id, confirmed),
+            |outcome| {
+                (
+                    outcome.success,
+                    if outcome.success {
+                        outcome.message.clone()
+                    } else if !outcome.error.is_empty() {
+                        outcome.error.clone()
+                    } else {
+                        outcome.message.clone()
+                    },
+                )
+            },
+        )
     })
     .await
     .map_err(|error| format!("Restore task failed: {error}"))?
@@ -461,9 +674,19 @@ async fn start_safe_launch(
     profile_id: String,
     confirmed: bool,
 ) -> Result<SafeLaunchOutcome, String> {
-    tauri::async_runtime::spawn_blocking(move || safe_launch::start(&app, &profile_id, confirmed))
-        .await
-        .map_err(|error| format!("Safe Launch task failed: {error}"))?
+    let title = format!("{profile_id} Safe Launch");
+    tauri::async_runtime::spawn_blocking(move || {
+        activity::track(
+            &app,
+            title,
+            ActivityKind::Launching,
+            "Disabling trusted optional files and starting the game",
+            || safe_launch::start(&app, &profile_id, confirmed),
+            |outcome| (true, outcome.message.clone()),
+        )
+    })
+    .await
+    .map_err(|error| format!("Safe Launch task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -472,9 +695,19 @@ async fn recover_safe_launch(
     profile_id: String,
     confirmed: bool,
 ) -> Result<SafeLaunchRecovery, String> {
-    tauri::async_runtime::spawn_blocking(move || safe_launch::recover(&app, &profile_id, confirmed))
-        .await
-        .map_err(|error| format!("Safe Launch recovery task failed: {error}"))?
+    let title = format!("{profile_id} Safe Launch recovery");
+    tauri::async_runtime::spawn_blocking(move || {
+        activity::track(
+            &app,
+            title,
+            ActivityKind::Restoring,
+            "Restoring trusted optional files",
+            || safe_launch::recover(&app, &profile_id, confirmed),
+            |recovery| (true, recovery.message.clone()),
+        )
+    })
+    .await
+    .map_err(|error| format!("Safe Launch recovery task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -482,18 +715,43 @@ async fn verify_profile_files(
     app: AppHandle,
     profile_id: String,
 ) -> Result<FileVerification, String> {
-    let config = storage::load_or_create(&app)?;
-    let profile = config
-        .profiles
-        .into_iter()
-        .find(|profile| profile.id == profile_id)
-        .ok_or_else(|| "That modpack profile does not exist".to_string())?;
-    let loaded = manifest::load_for_profile(&app, &profile);
-    if !loaded.summary.valid {
-        return Err(loaded.summary.errors.join("; "));
-    }
+    let title = format!("{profile_id} file verification");
     tauri::async_runtime::spawn_blocking(move || {
-        manifest::verify_required_files(&profile, &loaded.manifest)
+        activity::track(
+            &app,
+            title,
+            ActivityKind::Verifying,
+            "Hashing required modpack files",
+            || {
+                let config = storage::load_or_create(&app)?;
+                let profile = config
+                    .profiles
+                    .into_iter()
+                    .find(|profile| profile.id == profile_id)
+                    .ok_or_else(|| "That modpack profile does not exist".to_string())?;
+                let loaded = manifest::load_for_profile(&app, &profile);
+                if !loaded.summary.valid {
+                    return Err(loaded.summary.errors.join("; "));
+                }
+                manifest::verify_required_files(&profile, &loaded.manifest)
+            },
+            |verification| {
+                let failures = verification.missing.len()
+                    + verification.changed.len()
+                    + verification.unsafe_entries.len();
+                (
+                    failures == 0,
+                    if failures == 0 {
+                        format!("All {} required files match", verification.checked)
+                    } else {
+                        format!(
+                            "{failures} of {} required files need attention",
+                            verification.checked
+                        )
+                    },
+                )
+            },
+        )
     })
     .await
     .map_err(|error| format!("file verification task failed: {error}"))?
@@ -501,21 +759,31 @@ async fn verify_profile_files(
 
 #[tauri::command]
 fn launch_profile(app: AppHandle, profile_id: String) -> Result<LaunchOutcome, String> {
-    let config = storage::load_or_create(&app)?;
-    let profile = config
-        .profiles
-        .iter()
-        .find(|profile| profile.id == profile_id)
-        .ok_or_else(|| "That modpack profile does not exist".to_string())?;
-    let loaded = manifest::load_for_profile(&app, profile);
-    let health = readiness::assess(profile, Some(&loaded.summary));
-    if health.status != ReadinessStatus::Ready {
-        return Err(format!(
-            "{} is not ready: {}",
-            profile.display_name, health.headline
-        ));
-    }
-    launch::launch(profile)
+    let title = format!("{profile_id} launch");
+    activity::track(
+        &app,
+        title,
+        ActivityKind::Launching,
+        "Checking readiness and starting the configured game",
+        || {
+            let config = storage::load_or_create(&app)?;
+            let profile = config
+                .profiles
+                .iter()
+                .find(|profile| profile.id == profile_id)
+                .ok_or_else(|| "That modpack profile does not exist".to_string())?;
+            let loaded = manifest::load_for_profile(&app, profile);
+            let health = readiness::assess(profile, Some(&loaded.summary));
+            if health.status != ReadinessStatus::Ready {
+                return Err(format!(
+                    "{} is not ready: {}",
+                    profile.display_name, health.headline
+                ));
+            }
+            launch::launch(profile)
+        },
+        |outcome| (true, outcome.message.clone()),
+    )
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -538,6 +806,8 @@ pub fn run() {
     #[cfg(feature = "developer")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         bootstrap,
+        list_activity,
+        clear_finished_activity,
         refresh_public_catalog,
         select_profile,
         save_profile,
@@ -568,6 +838,8 @@ pub fn run() {
     #[cfg(not(feature = "developer"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         bootstrap,
+        list_activity,
+        clear_finished_activity,
         refresh_public_catalog,
         select_profile,
         save_profile,

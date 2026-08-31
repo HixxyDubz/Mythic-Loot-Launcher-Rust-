@@ -3,6 +3,7 @@ import "./App.css";
 import { EditionModpackManagerPanel, EditionPublisherPanel, launcherEdition, publisherAvailable } from "@launcher-edition";
 import { applyModpackTransaction, bootstrap, detectInstallations, launchProfile, prepareMinecraftBootstrap, prepareModpackTransaction, refreshPublicCatalog, saveProfile, selectProfile, verifyProfileFiles } from "./api";
 import { Dashboard } from "./components/Dashboard";
+import { ActivityPanel } from "./components/ActivityPanel";
 import { SafeLaunchPanel } from "./components/SafeLaunchPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { Sidebar } from "./components/Sidebar";
@@ -13,7 +14,7 @@ import type { BootstrapPayload, DetectedInstall, FileVerification, GameProfile }
 
 function App() {
   const [payload, setPayload] = useState<BootstrapPayload | null>(null);
-  const [page, setPage] = useState<"dashboard" | "settings" | "modpacks" | "publisher" | "update" | "safeLaunch" | "smartLaunch">("dashboard");
+  const [page, setPage] = useState<"dashboard" | "activity" | "settings" | "modpacks" | "publisher" | "update" | "safeLaunch" | "smartLaunch">("dashboard");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [fatalError, setFatalError] = useState("");
@@ -163,11 +164,14 @@ function App() {
             publisherAvailable={publisherAvailable}
             onSelect={(id) => void chooseProfile(id)}
             onSettings={() => setPage("settings")}
+            onActivity={() => setPage("activity")}
             onPublisher={() => setPage("publisher")}
             onAddModpack={() => setPage("modpacks")}
           />
           <div className="content-region">
-            {publisherAvailable && page === "modpacks" ? (
+            {page === "activity" ? (
+              <ActivityPanel onBack={() => setPage("dashboard")} onNotice={setNotice} />
+            ) : publisherAvailable && page === "modpacks" ? (
               <EditionModpackManagerPanel
                 games={payload.games}
                 profiles={payload.config.profiles}

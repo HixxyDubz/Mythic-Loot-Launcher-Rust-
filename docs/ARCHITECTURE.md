@@ -26,6 +26,7 @@ React does not receive arbitrary shell or filesystem access. Native operations a
 - `content_editor.rs` (Developer feature only): bounded News/Rules/Changelog editing that preserves distribution metadata, validates the complete candidate manifest and atomically saves only under launcher-owned data.
 - `content_publisher.rs` (Developer feature only): manifest-only release staging, immutable package-reference checks, native preview caching, asset revalidation and explicitly confirmed latest-release publication.
 - `remote.rs`: bounded HTTPS metadata reads and rollback-capable atomic cache replacement.
+- `activity.rs`: persistent native-operation history, process-interruption recovery, bounded retention, corruption preservation and finished-item cleanup.
 - `storage.rs`: Tauri data-directory resolution, portable override, validation, corruption preservation, backup and staged replacement.
 - `detection.rs`: configured candidates, Minecraft launcher/instance locations and Steam library/game scans.
 - `readiness.rs`: fail-closed executable, folder, trusted-manifest and modpack-version gates.
@@ -45,13 +46,15 @@ React does not receive arbitrary shell or filesystem access. Native operations a
 - `api.ts`: typed IPC facade that requires native Tauri for every operation and fails closed outside the desktop application.
 - `App.tsx`: application orchestration and error/notice states.
 - `editions/`: compile-time Player/Developer route selection. The Player module never imports the Publisher workspace.
-- `components/`: title bar, modpack navigation, dashboard, settings, Developer publisher, Smart Launch, Safe Launch and staged update/repair workspaces.
+- `components/`: title bar, modpack navigation, dashboard, Activity Centre, settings, Developer publisher, Smart Launch, Safe Launch and staged update/repair workspaces.
 - `types.ts`: IPC data contract mirrored from Rust.
 - `test/fixtures.ts`: test-only component inputs imported exclusively by test files and excluded from both production bundles.
 
 ## Persistence
 
 The native store resolves through Tauri's application data directory. Player and Developer use distinct application identifiers, so their normal installed state is separate and both editions can coexist. `MYTHIC_LOOT_DATA_DIR` overrides it only when explicitly set, which supports portable development and isolated acceptance runs. Invalid JSON is renamed to a timestamped `launcher-config.corrupt-*.json` before a fresh default is created.
+
+Native catalogue, setup, verification, update/repair, restore, launch and Developer publishing operations write a schema-versioned `activity-history.json` beside the edition's configuration. The store is atomically replaced, bounded to 4 MiB and the newest 100 records, while the UI exposes only the newest 12. Finished records can be cleared without touching active work. An unfinished record from an earlier launcher process is marked failed and interrupted on the next read rather than remaining permanently active; malformed history is preserved as `activity-history.corrupt-*.json`. Activity recording is observational: a history-write failure is logged but never changes the authority or result of the real operation.
 
 Detected game roots and managed modpack roots are distinct. For 7 Days to Die, detection records the Steam game folder for launching and its `Mods` child as the installation/publishing root because generated manifest paths are relative to `Mods`. Minecraft uses a selected CurseForge or Modrinth instance root directly. The launcher records that launcher choice and routes its existing staged update/repair transaction into the selected instance; it does not copy an owner's live profile directly to another player. Saves, logs, screenshots, options, caches and launcher/account metadata are outside the trusted release inventory and remain untouched. Current and legacy Modrinth profile roots are detected. First-time setup creates deterministic launcher-native bootstrap archives under application data: a CurseForge import ZIP with `manifest.json`, or a Modrinth `.mrpack` with `modrinth.index.json`. Both declare the trusted Minecraft/loader versions and an empty file list so the launcher creates the profile before Mythic Loot performs the verified GitHub sync. Actual import in both third-party launchers remains an external acceptance gate.
 

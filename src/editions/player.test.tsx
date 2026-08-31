@@ -18,6 +18,7 @@ describe("Player edition", () => {
         publisherAvailable={false}
         onSelect={vi.fn()}
         onSettings={vi.fn()}
+        onActivity={vi.fn()}
         onPublisher={vi.fn()}
         onAddModpack={vi.fn()}
       />,
