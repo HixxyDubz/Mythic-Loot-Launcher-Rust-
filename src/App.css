@@ -195,6 +195,19 @@ h1, h2, h3, p { margin-top: 0; }
 .field input:focus { border-color: rgba(158,99,255,.65); box-shadow: 0 0 0 3px rgba(158,99,255,.08); }
 .field input[readonly] { color: #8f829d; cursor: default; }
 .field select { width: 100%; height: 39px; padding: 0 11px; border: 1px solid rgba(255,255,255,.075); border-radius: 8px; outline: 0; background: #0c0912; color: #e9e1f3; font-size: 10px; }
+.field textarea { width: 100%; min-height: 88px; padding: 10px 11px; resize: vertical; border: 1px solid rgba(255,255,255,.075); border-radius: 8px; outline: 0; background: rgba(5,4,9,.58); color: #e9e1f3; font: inherit; font-size: 10px; line-height: 1.55; }
+.field textarea::placeholder { color: #564d60; }
+.field textarea:focus { border-color: rgba(158,99,255,.65); box-shadow: 0 0 0 3px rgba(158,99,255,.08); }
+.content-editor-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 20px 0 10px; }
+.content-editor-heading > div { display: grid; gap: 3px; }
+.content-editor-heading strong { font-size: 11px; }
+.content-editor-heading small { color: #7e718a; font-size: 8px; }
+.content-editor-heading .secondary-action { padding: 8px 11px; }
+.content-editor-empty { padding: 15px; border: 1px dashed rgba(149,116,189,.18); border-radius: 9px; color: #796c87; font-size: 9px; text-align: center; }
+.content-editor-changelog { display: grid; gap: 10px; }
+.content-editor-entry { padding: 14px; border: 1px solid rgba(149,116,189,.14); border-radius: 10px; background: rgba(255,255,255,.018); }
+.content-editor-entry > header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.content-editor-entry > header strong { color: #cdbbe0; font-size: 10px; }
 .form-error { margin: 12px 0 0; color: #ff8e9b; font-size: 10px; }
 .creation-next-step .section-title { margin-bottom: 0; }
 .publisher-status { min-height: 62px; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.025); }

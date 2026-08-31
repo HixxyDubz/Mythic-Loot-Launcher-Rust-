@@ -29,16 +29,19 @@ import type {
   ReleasePublication,
   RepositoryCreation,
   RepositoryRequest,
+  ManifestSummary,
 } from "../types";
+import { ManifestContentEditor } from "./ManifestContentEditor";
 
 interface PublisherPanelProps {
   profile: GameProfile;
+  manifest: ManifestSummary;
   onBack: () => void;
   onNotice: (message: string) => void;
   onPayload: (payload: BootstrapPayload) => void;
 }
 
-export function PublisherPanel({ profile, onBack, onNotice, onPayload }: PublisherPanelProps) {
+export function PublisherPanel({ profile, manifest, onBack, onNotice, onPayload }: PublisherPanelProps) {
   const [status, setStatus] = useState<PublisherStatus | null>(null);
   const [repository, setRepository] = useState(guessRepository(profile.manifestUrl));
   const [description, setDescription] = useState(`${profile.displayName} release repository`);
@@ -199,6 +202,13 @@ export function PublisherPanel({ profile, onBack, onNotice, onPayload }: Publish
       </div>
 
       <div className="settings-layout">
+        <ManifestContentEditor
+          profileId={profile.id}
+          manifest={manifest}
+          onNotice={onNotice}
+          onPayload={onPayload}
+        />
+
         <section className="settings-section panel-card">
           <div className="section-title"><LockKeyhole /><div><h2>Authenticated GitHub CLI</h2><p>No access token is stored in the launcher or exposed to React.</p></div></div>
           <div className={`publisher-status ${status?.authenticated ? "good" : "pending"}`}>

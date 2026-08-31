@@ -1,7 +1,8 @@
-import type { BootstrapPayload, GameDefinition, GameProfile } from "../types";
+import type { BootstrapPayload, GameDefinition, GameProfile, ManifestSummary } from "../types";
 
 export interface EditionPublisherProps {
   profile: GameProfile;
+  manifest: ManifestSummary;
   onBack: () => void;
   onNotice: (message: string) => void;
   onPayload: (payload: BootstrapPayload) => void;

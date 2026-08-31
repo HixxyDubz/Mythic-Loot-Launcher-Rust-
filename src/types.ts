@@ -85,6 +85,18 @@ export interface ManifestSummary {
   changelog: ChangelogEntry[];
 }
 
+export interface ManifestContentInput {
+  announcement: string;
+  newsBannerUrl: string;
+  rulesGuide: RulesGuide;
+  changelog: ChangelogEntry[];
+}
+
+export interface ManifestContentSaveOutcome {
+  changed: boolean;
+  payload: BootstrapPayload;
+}
+
 export interface FileVerification {
   profileId: string;
   checked: number;

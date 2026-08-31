@@ -177,7 +177,9 @@ function App() {
               />
             ) : publisherAvailable && page === "publisher" ? (
               <EditionPublisherPanel
+                key={selectedProfile.id}
                 profile={selectedProfile}
+                manifest={selectedManifest}
                 onBack={() => setPage("dashboard")}
                 onNotice={setNotice}
                 onPayload={setPayload}

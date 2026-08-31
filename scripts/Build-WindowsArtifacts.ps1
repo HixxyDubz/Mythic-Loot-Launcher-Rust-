@@ -113,6 +113,8 @@ foreach ($flavor in $flavors) {
             "publish_modpack_release",
             "prepare_public_catalog",
             "publish_public_catalog",
+            "save_manifest_content",
+            "Manifest content editor",
             "Player public catalogue"
         )
         $playerScripts = @(Get-ChildItem -LiteralPath (Join-Path $projectRoot "dist\assets") -Filter "*.js" -File)

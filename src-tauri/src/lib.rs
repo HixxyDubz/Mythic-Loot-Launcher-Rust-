@@ -1,6 +1,8 @@
 mod catalog;
 #[cfg(feature = "developer")]
 mod catalog_publisher;
+#[cfg(feature = "developer")]
+mod content_editor;
 mod detection;
 mod launch;
 mod manifest;
@@ -32,6 +34,8 @@ use updater::{TransactionOutcome, TransactionPreview, TransactionRequest};
 
 #[cfg(feature = "developer")]
 use catalog_publisher::{CatalogPreview, CatalogPublication};
+#[cfg(feature = "developer")]
+use content_editor::ManifestContentInput;
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,6 +49,14 @@ struct CatalogRefreshOutcome {
 #[serde(rename_all = "camelCase")]
 struct ModpackPublicationOutcome {
     publication: ReleasePublication,
+    payload: BootstrapPayload,
+}
+
+#[cfg(feature = "developer")]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ManifestContentSaveOutcome {
+    changed: bool,
     payload: BootstrapPayload,
 }
 
@@ -159,6 +171,26 @@ fn save_profile(app: AppHandle, profile: GameProfile) -> Result<BootstrapPayload
     }
     storage::save(&app, &config)?;
     payload(&app)
+}
+
+#[cfg(feature = "developer")]
+#[tauri::command]
+fn save_manifest_content(
+    app: AppHandle,
+    profile_id: String,
+    content: ManifestContentInput,
+) -> Result<ManifestContentSaveOutcome, String> {
+    let config = storage::load_or_create(&app)?;
+    let profile = config
+        .profiles
+        .iter()
+        .find(|profile| profile.id == profile_id)
+        .ok_or_else(|| "That modpack profile does not exist".to_string())?;
+    let changed = content_editor::save_for_profile(&app, profile, content)?;
+    Ok(ManifestContentSaveOutcome {
+        changed,
+        payload: payload(&app)?,
+    })
 }
 
 fn validate_profile_id(value: &str) -> Result<(), String> {
@@ -465,6 +497,7 @@ pub fn run() {
         refresh_public_catalog,
         select_profile,
         save_profile,
+        save_manifest_content,
         detect_installations,
         prepare_minecraft_bootstrap,
         github_publisher_status,

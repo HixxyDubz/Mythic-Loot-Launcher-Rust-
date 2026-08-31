@@ -12,6 +12,9 @@ use tauri::AppHandle;
 use crate::{models::GameProfile, remote, safe_path, storage};
 
 const MAX_REMOTE_MANIFEST_BYTES: usize = 64 * 1024 * 1024;
+const MAX_CONTENT_TEXT_CHARS: usize = 20_000;
+const MAX_CONTENT_ITEM_CHARS: usize = 2_000;
+const MAX_CONTENT_ITEMS: usize = 200;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
@@ -264,6 +267,7 @@ pub fn validate(manifest: &Manifest, expected: Option<&GameProfile>) -> Vec<Stri
     {
         errors.push(format!("unsafe newsBannerPath: {error}"));
     }
+    validate_content(manifest, &mut errors);
 
     let mut claimed: HashMap<String, &'static str> = HashMap::new();
     validate_entries(&manifest.files, "files", &mut claimed, &mut errors);
@@ -306,6 +310,83 @@ pub fn validate(manifest: &Manifest, expected: Option<&GameProfile>) -> Vec<Stri
         }
     }
     errors
+}
+
+fn validate_content(manifest: &Manifest, errors: &mut Vec<String>) {
+    validate_text_length(
+        &manifest.announcement,
+        "announcement",
+        MAX_CONTENT_TEXT_CHARS,
+        errors,
+    );
+    validate_text_length(&manifest.news_banner_url, "newsBannerUrl", 2_048, errors);
+    validate_text_length(&manifest.news_banner_path, "newsBannerPath", 1_024, errors);
+    validate_text_length(
+        &manifest.rules_guide.how_to_join,
+        "rulesGuide.howToJoin",
+        MAX_CONTENT_TEXT_CHARS,
+        errors,
+    );
+    validate_content_items(&manifest.rules_guide.rules, "rulesGuide.rules", errors);
+    validate_content_items(
+        &manifest.rules_guide.common_fixes,
+        "rulesGuide.commonFixes",
+        errors,
+    );
+    if manifest.changelog.len() > MAX_CONTENT_ITEMS {
+        errors.push(format!(
+            "changelog contains more than {MAX_CONTENT_ITEMS} entries"
+        ));
+    }
+    for (index, entry) in manifest.changelog.iter().enumerate() {
+        validate_text_length(
+            &entry.version,
+            &format!("changelog[{index}].version"),
+            128,
+            errors,
+        );
+        validate_text_length(
+            &entry.date,
+            &format!("changelog[{index}].date"),
+            128,
+            errors,
+        );
+        validate_text_length(
+            &entry.notes,
+            &format!("changelog[{index}].notes"),
+            MAX_CONTENT_TEXT_CHARS,
+            errors,
+        );
+        validate_content_items(&entry.added, &format!("changelog[{index}].added"), errors);
+        validate_content_items(
+            &entry.changed,
+            &format!("changelog[{index}].changed"),
+            errors,
+        );
+        validate_content_items(&entry.fixed, &format!("changelog[{index}].fixed"), errors);
+    }
+}
+
+fn validate_content_items(items: &[String], label: &str, errors: &mut Vec<String>) {
+    if items.len() > MAX_CONTENT_ITEMS {
+        errors.push(format!(
+            "{label} contains more than {MAX_CONTENT_ITEMS} entries"
+        ));
+    }
+    for (index, item) in items.iter().enumerate() {
+        validate_text_length(
+            item,
+            &format!("{label}[{index}]"),
+            MAX_CONTENT_ITEM_CHARS,
+            errors,
+        );
+    }
+}
+
+fn validate_text_length(value: &str, label: &str, maximum: usize, errors: &mut Vec<String>) {
+    if value.chars().count() > maximum {
+        errors.push(format!("{label} exceeds {maximum} characters"));
+    }
 }
 
 fn validate_entries(
@@ -504,6 +585,23 @@ mod tests {
         assert!(errors.contains("duplicate path"));
         assert!(errors.contains("both obsolete"));
         assert!(errors.contains("must not use a Discord invitation"));
+    }
+
+    #[test]
+    fn rejects_oversized_public_content() {
+        let mut manifest = valid_manifest();
+        manifest.announcement = "a".repeat(MAX_CONTENT_TEXT_CHARS + 1);
+        manifest.rules_guide.rules = (0..=MAX_CONTENT_ITEMS)
+            .map(|index| format!("Rule {index}"))
+            .collect();
+        manifest.changelog.push(ChangelogEntry {
+            added: vec!["x".repeat(MAX_CONTENT_ITEM_CHARS + 1)],
+            ..ChangelogEntry::default()
+        });
+        let errors = validate(&manifest, None).join("\n");
+        assert!(errors.contains("announcement exceeds"));
+        assert!(errors.contains("rulesGuide.rules contains more than"));
+        assert!(errors.contains("changelog[0].added[0] exceeds"));
     }
 
     #[test]

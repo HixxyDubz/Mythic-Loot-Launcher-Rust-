@@ -8,6 +8,8 @@ import type {
   FileVerification,
   GameProfile,
   LaunchOutcome,
+  ManifestContentInput,
+  ManifestContentSaveOutcome,
   MinecraftBootstrapArtifact,
   MinecraftBootstrapRequest,
   ModpackPublicationOutcome,
@@ -53,6 +55,14 @@ export async function selectProfile(profileId: string): Promise<BootstrapPayload
 export async function saveProfile(profile: GameProfile): Promise<BootstrapPayload> {
   requireNative("Profile saving");
   return invoke<BootstrapPayload>("save_profile", { profile });
+}
+
+export async function saveManifestContent(
+  profileId: string,
+  content: ManifestContentInput,
+): Promise<ManifestContentSaveOutcome> {
+  requireNative("Manifest content saving");
+  return invoke<ManifestContentSaveOutcome>("save_manifest_content", { profileId, content });
 }
 
 export async function detectInstallations(profile: GameProfile): Promise<DetectedInstall[]> {
