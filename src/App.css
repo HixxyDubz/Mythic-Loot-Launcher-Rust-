@@ -148,6 +148,28 @@ h1, h2, h3, p { margin-top: 0; }
 .migration-placeholder { min-height: 360px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 45px; text-align: center; }
 .placeholder-icon { width: 60px; height: 60px; display: grid; place-items: center; margin-bottom: 18px; border: 1px solid var(--line-strong); border-radius: 16px; background: rgba(158,99,255,.08); color: var(--purple-bright); }
 .migration-placeholder h2 { margin: 10px 0; font-size: 20px; }
+.content-page { min-height: 360px; padding: 22px; }
+.content-heading { display: flex; align-items: center; gap: 13px; padding-bottom: 17px; border-bottom: 1px solid var(--line); }
+.content-heading > svg { width: 24px; color: var(--purple-bright); }
+.content-heading h2 { margin: 4px 0 0; font-size: 20px; }
+.news-banner { width: 100%; max-height: 230px; margin-bottom: 20px; object-fit: cover; border: 1px solid var(--line); border-radius: 12px; }
+.announcement-copy { max-width: 850px; margin: 22px 2px 0; white-space: pre-wrap; color: #d5cadf; font-size: 13px; line-height: 1.75; }
+.content-empty { min-height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.content-empty h3 { margin: 0 0 8px; font-size: 16px; }
+.content-empty p { max-width: 500px; color: var(--muted); font-size: 11px; line-height: 1.65; }
+.changelog-list { display: grid; gap: 12px; margin-top: 18px; }
+.changelog-entry { padding: 17px 18px; border: 1px solid rgba(255,255,255,.06); border-radius: 11px; background: rgba(255,255,255,.025); }
+.changelog-entry header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 11px; border-bottom: 1px solid rgba(255,255,255,.05); }
+.changelog-entry header strong { color: var(--purple-bright); font-size: 14px; }
+.changelog-entry header span { color: #857890; font-size: 9px; }
+.changelog-entry > p { margin: 12px 0 0; white-space: pre-wrap; color: #b9aec5; font-size: 11px; line-height: 1.65; }
+.change-group { display: grid; grid-template-columns: 70px 1fr; gap: 10px; margin-top: 12px; }
+.change-group b { color: #9e8caf; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
+.change-group ul, .rules-grid ul, .rules-grid ol { margin: 0; padding-left: 19px; color: #cfc4d9; font-size: 11px; line-height: 1.7; }
+.rules-grid { display: grid; gap: 12px; margin-top: 18px; }
+.rules-grid article { padding: 17px 18px; border: 1px solid rgba(255,255,255,.06); border-radius: 11px; background: rgba(255,255,255,.025); }
+.rules-grid h3 { margin: 0 0 10px; color: #e7dff0; font-size: 13px; }
+.rules-grid p { margin: 0; white-space: pre-wrap; color: #c6bacf; font-size: 11px; line-height: 1.7; }
 .migration-placeholder p { max-width: 620px; color: var(--muted); font-size: 12px; line-height: 1.7; }
 
 .settings-page { max-width: 1120px; margin: 0 auto; }

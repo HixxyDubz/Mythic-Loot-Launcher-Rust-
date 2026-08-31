@@ -52,6 +52,21 @@ export interface ProfileHealth {
   details: string[];
 }
 
+export interface RulesGuide {
+  howToJoin: string;
+  rules: string[];
+  commonFixes: string[];
+}
+
+export interface ChangelogEntry {
+  version: string;
+  date: string;
+  added: string[];
+  changed: string[];
+  fixed: string[];
+  notes: string;
+}
+
 export interface ManifestSummary {
   profileId: string;
   valid: boolean;
@@ -64,6 +79,10 @@ export interface ManifestSummary {
   updateSize: number | null;
   source: string;
   errors: string[];
+  announcement: string;
+  newsBannerUrl: string;
+  rulesGuide: RulesGuide;
+  changelog: ChangelogEntry[];
 }
 
 export interface FileVerification {

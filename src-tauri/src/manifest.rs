@@ -34,6 +34,25 @@ pub struct UpdatePart {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
+pub struct RulesGuide {
+    pub how_to_join: String,
+    pub rules: Vec<String>,
+    pub common_fixes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ChangelogEntry {
+    pub version: String,
+    pub date: String,
+    pub added: Vec<String>,
+    pub changed: Vec<String>,
+    pub fixed: Vec<String>,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
 pub struct Manifest {
     pub manifest_version: String,
     pub profile_id: String,
@@ -51,8 +70,8 @@ pub struct Manifest {
     pub news_banner_url: String,
     pub minecraft_base_mod_loader: serde_json::Value,
     pub minecraft_instance_name: String,
-    pub rules_guide: serde_json::Value,
-    pub changelog: Vec<serde_json::Value>,
+    pub rules_guide: RulesGuide,
+    pub changelog: Vec<ChangelogEntry>,
     pub files: Vec<FileEntry>,
     pub obsolete_files: Vec<String>,
     pub optional_files: Vec<FileEntry>,
@@ -72,6 +91,10 @@ pub struct ManifestSummary {
     pub update_size: Option<u64>,
     pub source: String,
     pub errors: Vec<String>,
+    pub announcement: String,
+    pub news_banner_url: String,
+    pub rules_guide: RulesGuide,
+    pub changelog: Vec<ChangelogEntry>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -143,6 +166,10 @@ fn invalid_loaded(profile: &GameProfile, error: String) -> LoadedManifest {
             update_size: None,
             source: "unavailable".into(),
             errors: vec![error],
+            announcement: String::new(),
+            news_banner_url: String::new(),
+            rules_guide: RulesGuide::default(),
+            changelog: Vec::new(),
         },
     }
 }
@@ -191,6 +218,10 @@ fn summarize(manifest: &Manifest, source: String, errors: Vec<String>) -> Manife
         update_size,
         source,
         errors,
+        announcement: manifest.announcement.clone(),
+        news_banner_url: manifest.news_banner_url.clone(),
+        rules_guide: manifest.rules_guide.clone(),
+        changelog: manifest.changelog.clone(),
     }
 }
 

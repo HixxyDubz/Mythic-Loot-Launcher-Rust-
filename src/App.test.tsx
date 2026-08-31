@@ -47,6 +47,10 @@ vi.mock("./api", async (importOriginal) => {
         updateSize: null,
         source: "unavailable",
         errors: ["No published manifest yet"],
+        announcement: "",
+        newsBannerUrl: "",
+        rulesGuide: { howToJoin: "", rules: [], commonFixes: [] },
+        changelog: [],
       });
       return payload;
     }),

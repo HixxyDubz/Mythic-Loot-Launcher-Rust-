@@ -154,6 +154,10 @@ mod tests {
             update_size: None,
             source: "fixture".into(),
             errors: vec!["unsupported manifest".into()],
+            announcement: String::new(),
+            news_banner_url: String::new(),
+            rules_guide: crate::manifest::RulesGuide::default(),
+            changelog: Vec::new(),
         };
         assert_eq!(
             assess(&profile, Some(&summary)).status,

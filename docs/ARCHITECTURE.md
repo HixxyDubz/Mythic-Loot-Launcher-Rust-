@@ -27,7 +27,7 @@ React does not receive arbitrary shell or filesystem access. Native operations a
 - `storage.rs`: Tauri data-directory resolution, portable override, validation, corruption preservation, backup and staged replacement.
 - `detection.rs`: configured candidates, Minecraft launcher/instance locations and Steam library/game scans.
 - `readiness.rs`: fail-closed executable, folder, trusted-manifest and modpack-version gates.
-- `manifest.rs`: bundled/local manifest loading, schema and path validation, and streaming SHA-256 verification.
+- `manifest.rs`: bundled/local manifest loading, typed News/Rules/Changelog projection, schema and path validation, and streaming SHA-256 verification.
 - `minecraft_setup.rs`: deterministic minimal CurseForge ZIP and Modrinth `.mrpack` bootstrap generation from trusted Minecraft/loader metadata; no modpack files or personal state are embedded.
 - `safe_path.rs`: traversal, Windows alias, alternate-stream and archive-member rejection.
 - `publisher.rs` (Developer feature only): shell-free GitHub CLI preflight and fail-closed repository creation after explicit confirmation.

@@ -38,6 +38,10 @@ const manifest: ManifestSummary = {
   updateSize: 2048,
   source: "test manifest",
   errors: [],
+  announcement: "",
+  newsBannerUrl: "",
+  rulesGuide: { howToJoin: "", rules: [], commonFixes: [] },
+  changelog: [],
 };
 
 const cleanVerification: FileVerification = {

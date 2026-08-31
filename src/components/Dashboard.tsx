@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ReactNode } from "react";
 import {
   ArrowRight,
   Check,
@@ -174,21 +175,64 @@ export function Dashboard({ profile, health, manifest, verification, busy, onOpe
             </div>
           </section>
         </div>
-      ) : (
-        <section className="migration-placeholder panel-card">
-          <div className="placeholder-icon">
-            {tab === "news" ? <Globe2 /> : tab === "rules" ? <ShieldCheck /> : <Clock3 />}
-          </div>
-          <span className="eyebrow">TRUSTED MANIFEST READY</span>
-          <h2>{tab[0].toUpperCase() + tab.slice(1)} content is the next migration slice</h2>
-          <p>
-            This navigation is in place, but no placeholder production content is being presented as a finished feature.
-            Manifest v{manifest.manifestVersion} passed validation; structured modpack {tab} rendering is not wired into this screen yet.
-          </p>
-        </section>
-      )}
+      ) : tab === "news" ? <NewsContent manifest={manifest} />
+        : tab === "changelog" ? <ChangelogContent manifest={manifest} />
+          : <RulesContent manifest={manifest} />}
     </main>
   );
+}
+
+function NewsContent({ manifest }: { manifest: ManifestSummary }) {
+  return (
+    <section className="content-page panel-card">
+      {manifest.newsBannerUrl && <img className="news-banner" src={manifest.newsBannerUrl} alt="Modpack news" />}
+      <div className="content-heading"><Globe2 /><div><span className="eyebrow">LATEST NEWS</span><h2>Announcements</h2></div></div>
+      {manifest.announcement.trim()
+        ? <p className="announcement-copy">{manifest.announcement}</p>
+        : <EmptyContent icon={<Globe2 />} title="No announcements right now" detail="This modpack has not published a current announcement." />}
+    </section>
+  );
+}
+
+function ChangelogContent({ manifest }: { manifest: ManifestSummary }) {
+  return (
+    <section className="content-page panel-card">
+      <div className="content-heading"><Clock3 /><div><span className="eyebrow">VERSION HISTORY</span><h2>Changelog</h2></div></div>
+      {manifest.changelog.length ? <div className="changelog-list">{manifest.changelog.map((entry, index) => (
+        <article className="changelog-entry" key={`${entry.version}-${entry.date}-${index}`}>
+          <header><strong>v{entry.version}</strong><span>{entry.date || "Date not specified"}</span></header>
+          {entry.notes && <p>{entry.notes}</p>}
+          <ChangeGroup label="Added" items={entry.added} />
+          <ChangeGroup label="Changed" items={entry.changed} />
+          <ChangeGroup label="Fixed" items={entry.fixed} />
+        </article>
+      ))}</div> : <EmptyContent icon={<Clock3 />} title="No changelog available" detail="Release history will appear here when it is published in the trusted manifest." />}
+    </section>
+  );
+}
+
+function ChangeGroup({ label, items }: { label: string; items: string[] }) {
+  if (!items.length) return null;
+  return <div className="change-group"><b>{label}</b><ul>{items.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul></div>;
+}
+
+function RulesContent({ manifest }: { manifest: ManifestSummary }) {
+  const guide = manifest.rulesGuide;
+  const empty = !guide.howToJoin.trim() && !guide.rules.length && !guide.commonFixes.length;
+  return (
+    <section className="content-page panel-card">
+      <div className="content-heading"><ShieldCheck /><div><span className="eyebrow">PLAYER GUIDE</span><h2>Rules & common fixes</h2></div></div>
+      {empty ? <EmptyContent icon={<ShieldCheck />} title="No guide is configured" detail="This modpack has not published rules or common fixes." /> : <div className="rules-grid">
+        {guide.howToJoin && <article><h3>How to get started</h3><p>{guide.howToJoin}</p></article>}
+        {guide.rules.length > 0 && <article><h3>Rules</h3><ol>{guide.rules.map((rule, index) => <li key={`${rule}-${index}`}>{rule}</li>)}</ol></article>}
+        {guide.commonFixes.length > 0 && <article><h3>Common fixes</h3><ul>{guide.commonFixes.map((fix, index) => <li key={`${fix}-${index}`}>{fix}</li>)}</ul></article>}
+      </div>}
+    </section>
+  );
+}
+
+function EmptyContent({ icon, title, detail }: { icon: ReactNode; title: string; detail: string }) {
+  return <div className="content-empty"><div className="placeholder-icon">{icon}</div><h3>{title}</h3><p>{detail}</p></div>;
 }
 
 function ReadinessRow({

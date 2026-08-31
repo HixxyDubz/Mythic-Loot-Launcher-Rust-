@@ -98,6 +98,10 @@ export function testBootstrapPayload(profiles = structuredClone(testProfiles)): 
     updateSize: null,
     source: "test input",
     errors: [],
+    announcement: "",
+    newsBannerUrl: "",
+    rulesGuide: { howToJoin: "", rules: [], commonFixes: [] },
+    changelog: [],
   }));
   return {
     config: {
