@@ -9,13 +9,14 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { Sidebar } from "./components/Sidebar";
 import { SmartLaunchPanel } from "./components/SmartLaunchPanel";
 import { StoragePanel } from "./components/StoragePanel";
+import { SupportPanel } from "./components/SupportPanel";
 import { TitleBar } from "./components/TitleBar";
 import { UpdatePanel } from "./components/UpdatePanel";
 import type { BootstrapPayload, DetectedInstall, FileVerification, GameProfile } from "./types";
 
 function App() {
   const [payload, setPayload] = useState<BootstrapPayload | null>(null);
-  const [page, setPage] = useState<"dashboard" | "activity" | "storage" | "settings" | "modpacks" | "publisher" | "update" | "safeLaunch" | "smartLaunch">("dashboard");
+  const [page, setPage] = useState<"dashboard" | "activity" | "storage" | "support" | "settings" | "modpacks" | "publisher" | "update" | "safeLaunch" | "smartLaunch">("dashboard");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [fatalError, setFatalError] = useState("");
@@ -167,6 +168,7 @@ function App() {
             onSettings={() => setPage("settings")}
             onActivity={() => setPage("activity")}
             onStorage={() => setPage("storage")}
+            onSupport={() => setPage("support")}
             onPublisher={() => setPage("publisher")}
             onAddModpack={() => setPage("modpacks")}
           />
@@ -175,6 +177,8 @@ function App() {
               <ActivityPanel onBack={() => setPage("dashboard")} onNotice={setNotice} />
             ) : page === "storage" ? (
               <StoragePanel onBack={() => setPage("dashboard")} onNotice={setNotice} />
+            ) : page === "support" ? (
+              <SupportPanel key={selectedProfile.id} profile={selectedProfile} onBack={() => setPage("dashboard")} onNotice={setNotice} />
             ) : publisherAvailable && page === "modpacks" ? (
               <EditionModpackManagerPanel
                 games={payload.games}

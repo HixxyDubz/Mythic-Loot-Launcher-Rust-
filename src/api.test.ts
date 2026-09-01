@@ -4,6 +4,7 @@ import {
   getSafeLaunchStatus,
   githubPublisherStatus,
   listRestorePoints,
+  prepareSupportBundle,
   preparePublicCatalog,
   publishPublicCatalog,
   refreshPublicCatalog,
@@ -18,5 +19,6 @@ describe("native API boundary", () => {
     await expect(githubPublisherStatus()).rejects.toThrow(/requires the native Mythic Loot Launcher/i);
     await expect(listRestorePoints("minecraft_main")).rejects.toThrow(/requires the native Mythic Loot Launcher/i);
     await expect(getSafeLaunchStatus("minecraft_main")).rejects.toThrow(/requires the native Mythic Loot Launcher/i);
+    await expect(prepareSupportBundle("minecraft_main")).rejects.toThrow(/requires the native Mythic Loot Launcher/i);
   });
 });

@@ -25,6 +25,7 @@ const RECENT_ITEMS: usize = 12;
 pub enum ActivityKind {
     Catalogue,
     Storage,
+    Support,
     Verifying,
     Updating,
     Repairing,

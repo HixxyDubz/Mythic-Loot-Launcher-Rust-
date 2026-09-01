@@ -20,6 +20,7 @@ describe("Player edition", () => {
         onSettings={vi.fn()}
         onActivity={vi.fn()}
         onStorage={vi.fn()}
+        onSupport={vi.fn()}
         onPublisher={vi.fn()}
         onAddModpack={vi.fn()}
       />,
@@ -27,6 +28,7 @@ describe("Player edition", () => {
 
     expect(screen.getByText("Player edition")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /storage/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /support/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /publisher/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /add modpack/i })).not.toBeInTheDocument();
   });

@@ -30,6 +30,8 @@ import type {
   StorageCleanupKind,
   StorageCleanupOutcome,
   StorageReport,
+  SupportBundleOutcome,
+  SupportPreview,
   TransactionOutcome,
   TransactionPreview,
   TransactionRequest,
@@ -69,6 +71,19 @@ export async function cleanStorage(
 ): Promise<StorageCleanupOutcome> {
   requireNative("Storage cleanup");
   return invoke<StorageCleanupOutcome>("clean_storage", { kind, confirmed });
+}
+
+export async function prepareSupportBundle(profileId: string): Promise<SupportPreview> {
+  requireNative("Support bundle review");
+  return invoke<SupportPreview>("prepare_support_bundle", { profileId });
+}
+
+export async function createSupportBundle(
+  previewId: string,
+  confirmed: boolean,
+): Promise<SupportBundleOutcome> {
+  requireNative("Support bundle export");
+  return invoke<SupportBundleOutcome>("create_support_bundle", { previewId, confirmed });
 }
 
 export async function refreshPublicCatalog(): Promise<CatalogRefreshOutcome> {

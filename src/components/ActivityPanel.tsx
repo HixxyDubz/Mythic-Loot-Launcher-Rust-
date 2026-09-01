@@ -132,6 +132,7 @@ function kindIcon(kind: ActivityKind) {
   switch (kind) {
     case "catalogue": return Download;
     case "storage": return HardDrive;
+    case "support": return Wrench;
     case "verifying": return SearchCheck;
     case "updating": return HardDriveDownload;
     case "repairing": return Wrench;
@@ -146,6 +147,7 @@ function kindLabel(kind: ActivityKind): string {
   switch (kind) {
     case "catalogue": return "Catalogue";
     case "storage": return "Storage";
+    case "support": return "Support";
     case "verifying": return "Verifying";
     case "updating": return "Updating";
     case "repairing": return "Repairing";

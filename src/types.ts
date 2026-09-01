@@ -155,6 +155,7 @@ export interface CatalogRefreshOutcome {
 export type ActivityKind =
   | "catalogue"
   | "storage"
+  | "support"
   | "verifying"
   | "updating"
   | "repairing"
@@ -202,6 +203,34 @@ export interface StorageReport {
   buckets: StorageBucket[];
   issues: string[];
   truncated: boolean;
+}
+
+export interface SupportPreview {
+  previewId: string;
+  profileId: string;
+  displayName: string;
+  latestLogPath: string;
+  latestLogName: string;
+  sourceBytes: number;
+  includedBytes: number;
+  truncated: boolean;
+  summary: string;
+  redactedLog: string;
+  files: string[];
+  issues: string[];
+  ready: boolean;
+  message: string;
+}
+
+export interface SupportBundleOutcome {
+  profileId: string;
+  path: string;
+  directory: string;
+  fileName: string;
+  bytes: number;
+  sha256: string;
+  files: string[];
+  message: string;
 }
 
 export interface StorageCleanupOutcome {

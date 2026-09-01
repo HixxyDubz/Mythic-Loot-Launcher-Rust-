@@ -22,6 +22,7 @@ mod safe_launch;
 mod safe_path;
 mod storage;
 mod storage_maintenance;
+mod support;
 mod updater;
 
 use activity::{ActivityItem, ActivityKind};
@@ -35,6 +36,7 @@ use publisher::{PublisherStatus, RepositoryCreation, RepositoryRequest};
 use restore_points::{RestoreOutcome, RestorePointSummary, RestorePreview};
 use safe_launch::{SafeLaunchOutcome, SafeLaunchRecovery, SafeLaunchStatus};
 use storage_maintenance::{StorageCleanupKind, StorageCleanupOutcome, StorageReport};
+use support::{SupportBundleOutcome, SupportPreview};
 use tauri::{AppHandle, Manager};
 use updater::{TransactionOutcome, TransactionPreview, TransactionRequest};
 
@@ -203,6 +205,45 @@ async fn clean_storage(
     })
     .await
     .map_err(|error| format!("Storage cleanup task failed: {error}"))?
+}
+
+#[tauri::command]
+async fn prepare_support_bundle(
+    app: AppHandle,
+    profile_id: String,
+) -> Result<SupportPreview, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        activity::track(
+            &app,
+            "Support bundle review",
+            ActivityKind::Support,
+            "Discovering known logs and preparing an in-memory redacted preview",
+            || support::prepare(&app, &profile_id),
+            |preview| (preview.ready, preview.message.clone()),
+        )
+    })
+    .await
+    .map_err(|error| format!("Support bundle review task failed: {error}"))?
+}
+
+#[tauri::command]
+async fn create_support_bundle(
+    app: AppHandle,
+    preview_id: String,
+    confirmed: bool,
+) -> Result<SupportBundleOutcome, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        activity::track(
+            &app,
+            "Support bundle export",
+            ActivityKind::Support,
+            "Writing the explicitly confirmed redacted support files",
+            || support::create(&app, &preview_id, confirmed),
+            |outcome| (true, outcome.message.clone()),
+        )
+    })
+    .await
+    .map_err(|error| format!("Support bundle export task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -859,6 +900,8 @@ pub fn run() {
         clear_finished_activity,
         get_storage_report,
         clean_storage,
+        prepare_support_bundle,
+        create_support_bundle,
         refresh_public_catalog,
         select_profile,
         save_profile,
@@ -893,6 +936,8 @@ pub fn run() {
         clear_finished_activity,
         get_storage_report,
         clean_storage,
+        prepare_support_bundle,
+        create_support_bundle,
         refresh_public_catalog,
         select_profile,
         save_profile,

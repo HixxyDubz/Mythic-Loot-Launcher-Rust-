@@ -191,6 +191,13 @@ fn report_at(data_dir: &Path, profiles: &[GameProfile]) -> Result<StorageReport,
             "safe-launch",
             None,
         ),
+        (
+            "support-bundles",
+            "Privacy-redacted support bundles",
+            "Generated files",
+            "support-bundles",
+            None,
+        ),
     ];
     for (key, label, category, relative, cleanup_kind) in managed {
         let path = data_dir.join(relative);
