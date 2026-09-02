@@ -92,7 +92,7 @@ export function AppUpdatePublisherPanel({ onNotice }: AppUpdatePublisherPanelPro
         </article>
       )}
 
-      {publication && <article className="app-release-publication"><CheckCircle2 /><div><strong>Player app release published</strong><p>{publication.tag} · {publication.assets} immutable assets</p><small>{publication.url}</small></div></article>}
+      {publication && <article className="app-release-publication"><CheckCircle2 /><div><strong>Player app release published</strong><p>{publication.tag} · {publication.assets} version-tagged assets</p><small>{publication.url}</small></div></article>}
       <div className="publisher-safety safety-note"><ShieldAlert size={15} /> No Developer executable, token, arbitrary repository or unverified build artifact can enter this release.</div>
     </section>
   );
