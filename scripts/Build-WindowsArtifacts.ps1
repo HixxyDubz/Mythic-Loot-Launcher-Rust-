@@ -197,7 +197,11 @@ $buildManifest = [ordered]@{
     createdAtUtc = (Get-Date).ToUniversalTime().ToString("o")
     artifacts = $artifactRecords
 } | ConvertTo-Json -Depth 5
-Set-Content -LiteralPath $buildManifestPath -Value $buildManifest -Encoding utf8
+[System.IO.File]::WriteAllText(
+    $buildManifestPath,
+    $buildManifest + [Environment]::NewLine,
+    [System.Text.UTF8Encoding]::new($false)
+)
 
 $legacyInstaller = Join-Path $artifactDirectory "Mythic Loot Launcher Setup $($baseConfig.version).exe"
 $legacyUnpacked = Join-Path $artifactDirectory "win-unpacked"
