@@ -82,10 +82,11 @@ try {
         throw "The visible Developer publication flow did not complete"
     }
 
-    $release = & gh.exe release view $tag --repo HixxyDubz/Mythic-Loot-Launcher-Rust- --json tagName,url,isLatest,assets | ConvertFrom-Json
+    $release = & gh.exe release view $tag --repo HixxyDubz/Mythic-Loot-Launcher-Rust- --json tagName,url,assets | ConvertFrom-Json
+    $latest = & gh.exe release view --repo HixxyDubz/Mythic-Loot-Launcher-Rust- --json tagName | ConvertFrom-Json
     $assetNames = @($release.assets | ForEach-Object { $_.name })
     $expectedNames = @("Mythic-Loot-Launcher-Player.exe", "Mythic-Loot-Launcher-Player-Setup.exe", "launcher-update-player.json")
-    if ($release.tagName -ne $tag -or -not $release.isLatest -or $assetNames.Count -ne 3 -or @($expectedNames | Where-Object { $assetNames -notcontains $_ }).Count -ne 0) {
+    if ($release.tagName -ne $tag -or $latest.tagName -ne $tag -or $assetNames.Count -ne 3 -or @($expectedNames | Where-Object { $assetNames -notcontains $_ }).Count -ne 0) {
         throw "GitHub release $tag does not contain the exact latest Player asset set"
     }
     Write-Host "Developer live publication passed: reviewed both packaged Player hashes, confirmed in the visible UI, and published exact latest release $tag at $($release.url)."
