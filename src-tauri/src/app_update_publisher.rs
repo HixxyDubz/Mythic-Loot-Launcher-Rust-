@@ -140,7 +140,7 @@ pub fn publish(preview_id: &str, confirmed: bool) -> Result<AppReleasePublicatio
     ])?;
     if existing.status.success() {
         return Err(format!(
-            "Immutable app release {} already exists; bump the app version and rebuild",
+            "Version-tagged app release {} already exists; bump the app version and rebuild",
             plan.tag
         ));
     }
@@ -185,7 +185,7 @@ pub fn publish(preview_id: &str, confirmed: bool) -> Result<AppReleasePublicatio
         version: plan.version,
         url,
         assets: 3,
-        message: "The immutable Player executable, installer and checksum-protected latest feed were published.".into(),
+        message: "The version-tagged Player executable, installer and checksum-protected latest feed were published.".into(),
     })
 }
 

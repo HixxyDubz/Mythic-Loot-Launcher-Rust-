@@ -4,6 +4,7 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
+$appVersion = (Get-Content -Raw -LiteralPath (Join-Path $projectRoot "src-tauri\tauri.conf.json") | ConvertFrom-Json).version
 $artifactRoot = [System.IO.Path]::GetFullPath((Join-Path $projectRoot "artifacts\windows"))
 $playerExecutable = Join-Path $artifactRoot "player\win-unpacked\Mythic Loot Launcher Player.exe"
 $smokeRoot = Join-Path $artifactRoot ("app-update-smoke-" + [guid]::NewGuid().ToString("N"))
@@ -107,7 +108,7 @@ try {
 
     $journal = [ordered]@{
         schemaVersion = 1
-        version = "0.1.0"
+        version = $appVersion
         targetExe = $target
         targetSha256 = $originalHash
         stagedExe = $staged

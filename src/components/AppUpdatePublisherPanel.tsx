@@ -85,7 +85,7 @@ export function AppUpdatePublisherPanel({ onNotice }: AppUpdatePublisherPanelPro
           {preview.outputDirectory && <button className="secondary-action" onClick={() => void openPath(preview.outputDirectory).catch((error) => onNotice(errorMessage(error)))}><FolderOpen size={14} /> Open reviewed assets</button>}
           {preview.ready && !publication && (
             <>
-              <label className="confirmation-row"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span>I reviewed these exact assets. Publish immutable {preview.tag} and replace the public latest Player feed.</span></label>
+              <label className="confirmation-row"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span>I reviewed these exact assets. Publish version-tagged {preview.tag} and replace the public latest Player feed.</span></label>
               <button className="danger-action" onClick={() => void publish()} disabled={!confirmed || busy}>{busy ? <LoaderCircle className="spin" size={16} /> : <CloudUpload size={16} />} Publish Player app update</button>
             </>
           )}
