@@ -66,8 +66,9 @@ function setFieldExpression(labelText, value, multiline = false) {
     const label = [...document.querySelectorAll("label")].find((item) => item.innerText.includes(${JSON.stringify(labelText)}));
     const field = label?.querySelector(${JSON.stringify(elementType)});
     if (!field) return false;
+    field.focus();
     Object.getOwnPropertyDescriptor(${prototype}, "value").set.call(field, ${JSON.stringify(value)});
-    field.dispatchEvent(new Event("input", { bubbles: true }));
+    field.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: ${JSON.stringify(value)} }));
     field.dispatchEvent(new Event("change", { bubbles: true }));
     return true;
   })()`;
@@ -79,6 +80,11 @@ try {
   await evaluate(buttonExpression("App update", true));
   await waitFor(setFieldExpression("Windows build manifest", manifestPath), "the build manifest field");
   await waitFor(setFieldExpression("Release notes", releaseNotes, true), "the release notes field");
+  await waitFor(
+    `document.querySelector(".app-release-publisher input")?.value === ${JSON.stringify(manifestPath)} && document.querySelector(".app-release-publisher textarea")?.value === ${JSON.stringify(releaseNotes)}`,
+    "the committed release form values",
+  );
+  await new Promise((resolve) => setTimeout(resolve, 500));
   await waitFor(buttonExpression("Verify packaged Player release", false), "the release verification action");
   await evaluate(buttonExpression("Verify packaged Player release", true));
 
