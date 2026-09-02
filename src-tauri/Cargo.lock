@@ -2105,6 +2105,7 @@ dependencies = [
  "base64 0.22.1",
  "fs2",
  "regex",
+ "semver",
  "serde",
  "serde_json",
  "sha2",

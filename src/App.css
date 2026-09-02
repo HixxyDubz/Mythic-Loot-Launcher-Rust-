@@ -494,6 +494,52 @@ h1, h2, h3, p { margin-top: 0; }
 .native-data-card .section-title { margin-bottom: 11px; }
 .safety-note { display: flex; align-items: center; gap: 7px; padding: 9px 11px; border-radius: 8px; background: rgba(85,217,148,.045); color: #7f9d91; font-size: 8px; }
 .safety-note svg { color: var(--green); transform: rotate(45deg); }
+.app-update-page { max-width: 940px; }
+.app-update-result, .app-update-status, .app-update-loading, .app-update-unavailable, .app-update-stage, .app-release-publication { display: flex; align-items: flex-start; gap: 13px; }
+.app-update-result > svg, .app-update-status > svg, .app-update-loading > svg, .app-update-unavailable > svg, .app-update-stage > svg, .app-release-publication > svg { flex: 0 0 auto; width: 24px; }
+.app-update-result h2, .app-update-status h2, .app-update-loading h2, .app-update-unavailable h2, .app-update-stage h2 { margin: 1px 0 5px; font-size: 14px; }
+.app-update-result p, .app-update-status p, .app-update-unavailable p, .app-update-stage p { margin: 0; color: #8d8099; font-size: 9px; line-height: 1.55; }
+.app-update-result.success, .app-update-status.current, .app-update-stage, .app-release-publication { border-color: rgba(85,217,148,.24); }
+.app-update-result.success > svg, .app-update-status.current > svg, .app-update-stage > svg, .app-release-publication > svg { color: var(--green); }
+.app-update-result.failed, .app-update-unavailable { border-color: rgba(255,113,132,.22); }
+.app-update-result.failed > svg, .app-update-unavailable > svg { color: var(--red); }
+.app-update-status.available { border-color: rgba(88,220,255,.23); }
+.app-update-status.available > svg, .app-update-details .section-title > svg { color: var(--cyan); }
+.app-update-loading { align-items: center; color: #9c8bab; }
+.app-update-details .preview-facts, .safe-session-facts { margin-top: 14px; }
+.app-update-notes { margin-top: 14px; padding: 12px; border: 1px solid rgba(149,116,189,.13); border-radius: 8px; background: rgba(149,116,189,.025); }
+.app-update-notes strong { color: #c8bad4; font-size: 9px; }
+.app-update-notes p { margin: 6px 0 0; color: #87798f; font-size: 9px; line-height: 1.55; white-space: pre-wrap; }
+.app-update-details > .primary-action, .app-update-stage > .danger-action { width: 100%; margin-top: 14px; }
+.app-update-warning { display: flex; align-items: center; gap: 9px; margin-top: 14px; padding: 10px; border: 1px solid rgba(255,194,92,.17); border-radius: 8px; color: #b49b6a; font-size: 9px; }
+.app-update-warning > svg { width: 18px; color: var(--yellow); }
+.app-update-stage { display: grid; grid-template-columns: 32px minmax(0, 1fr); }
+.app-update-stage small { display: block; margin-top: 5px; overflow-wrap: anywhere; color: #70647c; font-family: Consolas, monospace; font-size: 7px; }
+.app-update-stage .transaction-pipeline, .app-update-stage .confirmation-row, .app-update-stage > .danger-action { grid-column: 1 / -1; }
+.app-release-publisher { margin-top: 4px; }
+.app-release-publisher .section-title > svg { color: var(--purple-bright); }
+.app-release-publisher textarea { min-height: 92px; resize: vertical; }
+.app-release-prepare { width: 100%; }
+.app-release-preview { margin-top: 15px; padding: 13px; border: 1px solid rgba(149,116,189,.16); border-radius: 9px; background: rgba(149,116,189,.025); }
+.app-release-preview.ready { border-color: rgba(85,217,148,.24); }
+.app-release-preview.blocked { border-color: rgba(255,113,132,.22); }
+.app-release-preview header { display: flex; align-items: flex-start; gap: 10px; }
+.app-release-preview header > svg { width: 21px; color: var(--purple-bright); }
+.app-release-preview.ready header > svg { color: var(--green); }
+.app-release-preview header div { display: grid; gap: 3px; }
+.app-release-preview header strong { color: #d8cfdf; font-size: 10px; }
+.app-release-preview header small { color: #786c85; font-size: 8px; }
+.release-assets { display: grid; gap: 7px; margin: 13px 0; }
+.release-assets span { display: grid; gap: 3px; padding: 9px 10px; border: 1px solid rgba(88,220,255,.11); border-radius: 7px; background: rgba(88,220,255,.025); }
+.release-assets b { color: #bdc8d2; font-size: 9px; }
+.release-assets small { overflow-wrap: anywhere; color: #677783; font-family: Consolas, monospace; font-size: 7px; }
+.app-release-preview .confirmation-row { margin-top: 13px; }
+.app-release-preview .danger-action { width: 100%; margin-top: 10px; }
+.app-release-publication { margin-top: 13px; }
+.app-release-publication strong { color: #c9dfd3; font-size: 10px; }
+.app-release-publication p { margin: 4px 0; color: #819589; font-size: 9px; }
+.app-release-publication small { overflow-wrap: anywhere; color: #64756c; font-size: 8px; }
+.publisher-safety { margin-top: 13px; }
 
 .toast { position: fixed; right: 20px; bottom: 18px; z-index: 30; max-width: 460px; padding: 12px 15px; border: 1px solid rgba(177,129,255,.32); border-radius: 10px; background: rgba(29,22,42,.96); box-shadow: 0 16px 45px rgba(0,0,0,.38); color: #dcd1e8; font-size: 10px; text-align: left; cursor: pointer; }
 .loading-state, .fatal-state { height: calc(100% - 39px); display: flex; flex-direction: column; align-items: center; justify-content: center; color: #a99bb7; }

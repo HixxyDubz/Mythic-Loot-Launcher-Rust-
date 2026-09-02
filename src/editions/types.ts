@@ -21,3 +21,7 @@ export interface EditionProfileMetadataProps {
   games: GameDefinition[];
   onUpdate: <K extends keyof GameProfile>(key: K, value: GameProfile[K]) => void;
 }
+
+export interface EditionAppUpdatePublisherProps {
+  onNotice: (message: string) => void;
+}

@@ -154,6 +154,7 @@ export interface CatalogRefreshOutcome {
 
 export type ActivityKind =
   | "catalogue"
+  | "appUpdate"
   | "storage"
   | "support"
   | "verifying"
@@ -230,6 +231,81 @@ export interface SupportBundleOutcome {
   bytes: number;
   sha256: string;
   files: string[];
+  message: string;
+}
+
+export interface AppUpdatePreview {
+  previewId: string;
+  feedUrl: string;
+  currentVersion: string;
+  latestVersion: string;
+  releaseNotes: string;
+  publishedAt: string;
+  mandatory: boolean;
+  minimumSupportedVersion: string;
+  assetBytes: number;
+  assetSha256: string;
+  updateAvailable: boolean;
+  supported: boolean;
+  canInstall: boolean;
+  message: string;
+}
+
+export interface AppUpdateStage {
+  stageId: string;
+  version: string;
+  path: string;
+  bytes: number;
+  sha256: string;
+  ready: boolean;
+  message: string;
+}
+
+export interface AppUpdateApplyOutcome {
+  version: string;
+  helperStarted: boolean;
+  message: string;
+}
+
+export interface AppUpdateResult {
+  version: string;
+  success: boolean;
+  restartProcessId: number | null;
+  message: string;
+  recordedAt: number;
+}
+
+export interface AppReleaseRequest {
+  buildManifestPath: string;
+  releaseNotes: string;
+}
+
+export interface AppReleaseAssetPreview {
+  fileName: string;
+  bytes: number;
+  sha256: string;
+}
+
+export interface AppReleasePreview {
+  previewId: string;
+  repository: string;
+  tag: string;
+  version: string;
+  releaseNotes: string;
+  feedUrl: string;
+  outputDirectory: string;
+  assets: AppReleaseAssetPreview[];
+  ready: boolean;
+  issues: string[];
+  message: string;
+}
+
+export interface AppReleasePublication {
+  repository: string;
+  tag: string;
+  version: string;
+  url: string;
+  assets: number;
   message: string;
 }
 

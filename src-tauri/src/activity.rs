@@ -24,6 +24,7 @@ const RECENT_ITEMS: usize = 12;
 #[serde(rename_all = "camelCase")]
 pub enum ActivityKind {
     Catalogue,
+    AppUpdate,
     Storage,
     Support,
     Verifying,

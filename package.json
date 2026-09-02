@@ -16,6 +16,7 @@
     "package:windows:player": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Build-WindowsArtifacts.ps1 -Edition Player",
     "package:windows:developer": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Build-WindowsArtifacts.ps1 -Edition Developer",
     "smoke:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Smoke-WindowsArtifacts.ps1",
+    "smoke:app-update": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Smoke-AppUpdateHelper.ps1",
     "tauri": "tauri"
   },
   "dependencies": {

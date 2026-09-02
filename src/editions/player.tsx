@@ -1,4 +1,4 @@
-import type { EditionModpackManagerProps, EditionProfileMetadataProps, EditionPublisherProps } from "./types";
+import type { EditionAppUpdatePublisherProps, EditionModpackManagerProps, EditionProfileMetadataProps, EditionPublisherProps } from "./types";
 
 export const launcherEdition = "player" as const;
 export const publisherAvailable = false;
@@ -12,5 +12,9 @@ export function EditionModpackManagerPanel(_props: EditionModpackManagerProps) {
 }
 
 export function EditionProfileMetadataSection(_props: EditionProfileMetadataProps) {
+  return null;
+}
+
+export function EditionAppUpdatePublisherPanel(_props: EditionAppUpdatePublisherProps) {
   return null;
 }

@@ -18,7 +18,7 @@ const TEMPORARY_RETENTION: Duration = Duration::from_secs(24 * 60 * 60);
 const MAX_SCANNED_ENTRIES: usize = 1_000_000;
 const MAX_REPORTED_ISSUES: usize = 20;
 
-const TEMPORARY_ROOTS: [(&str, &str, &str); 5] = [
+const TEMPORARY_ROOTS: [(&str, &str, &str); 7] = [
     ("update-staging", "Update staging", "update-staging"),
     ("restore-staging", "Restore staging", "restore-staging"),
     (
@@ -35,6 +35,16 @@ const TEMPORARY_ROOTS: [(&str, &str, &str); 5] = [
         "content-release-previews",
         "Developer content previews",
         "content-release-previews",
+    ),
+    (
+        "app-update-staging",
+        "Application update staging",
+        "app-update-staging",
+    ),
+    (
+        "app-update-release-previews",
+        "Developer application release previews",
+        "app-update-release-previews",
     ),
 ];
 

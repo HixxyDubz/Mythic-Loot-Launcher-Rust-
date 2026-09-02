@@ -1,4 +1,6 @@
 mod activity;
+#[cfg(feature = "developer")]
+mod app_update_publisher;
 mod catalog;
 #[cfg(feature = "developer")]
 mod catalog_publisher;
@@ -20,6 +22,7 @@ mod remote;
 mod restore_points;
 mod safe_launch;
 mod safe_path;
+mod self_update;
 mod storage;
 mod storage_maintenance;
 mod support;
@@ -35,11 +38,14 @@ use packager::{PackagePreview, PackageRequest, ReleasePublication};
 use publisher::{PublisherStatus, RepositoryCreation, RepositoryRequest};
 use restore_points::{RestoreOutcome, RestorePointSummary, RestorePreview};
 use safe_launch::{SafeLaunchOutcome, SafeLaunchRecovery, SafeLaunchStatus};
+use self_update::{AppUpdateApplyOutcome, AppUpdatePreview, AppUpdateResult, AppUpdateStage};
 use storage_maintenance::{StorageCleanupKind, StorageCleanupOutcome, StorageReport};
 use support::{SupportBundleOutcome, SupportPreview};
 use tauri::{AppHandle, Manager};
 use updater::{TransactionOutcome, TransactionPreview, TransactionRequest};
 
+#[cfg(feature = "developer")]
+use app_update_publisher::{AppReleasePreview, AppReleasePublication, AppReleaseRequest};
 #[cfg(feature = "developer")]
 use catalog_publisher::{CatalogPreview, CatalogPublication};
 #[cfg(feature = "developer")]
@@ -244,6 +250,113 @@ async fn create_support_bundle(
     })
     .await
     .map_err(|error| format!("Support bundle export task failed: {error}"))?
+}
+
+#[tauri::command]
+async fn check_app_update() -> Result<AppUpdatePreview, String> {
+    tauri::async_runtime::spawn_blocking(self_update::check)
+        .await
+        .map_err(|error| format!("App update check task failed: {error}"))?
+}
+
+#[tauri::command]
+fn app_update_result(app: AppHandle) -> Result<Option<AppUpdateResult>, String> {
+    self_update::last_result(&app)
+}
+
+#[tauri::command]
+async fn prepare_app_update(app: AppHandle, preview_id: String) -> Result<AppUpdateStage, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        activity::track(
+            &app,
+            "Player app update download",
+            ActivityKind::AppUpdate,
+            "Downloading the reviewed Player executable",
+            || self_update::prepare(&app, &preview_id),
+            |stage| (stage.ready, stage.message.clone()),
+        )
+    })
+    .await
+    .map_err(|error| format!("App update download task failed: {error}"))?
+}
+
+#[tauri::command]
+async fn apply_app_update(
+    app: AppHandle,
+    stage_id: String,
+    confirmed: bool,
+) -> Result<AppUpdateApplyOutcome, String> {
+    if activity::has_active(&app)? {
+        return Err(
+            "Wait for current launcher activity to finish before installing an app update".into(),
+        );
+    }
+    let task_app = app.clone();
+    let outcome = tauri::async_runtime::spawn_blocking(move || {
+        activity::track(
+            &task_app,
+            "Player app update installation",
+            ActivityKind::AppUpdate,
+            "Starting the verified external replacement helper",
+            || self_update::apply(&stage_id, confirmed),
+            |outcome| (outcome.helper_started, outcome.message.clone()),
+        )
+    })
+    .await
+    .map_err(|error| format!("App update installation task failed: {error}"))??;
+    if outcome.helper_started {
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            app.exit(0);
+        });
+    }
+    Ok(outcome)
+}
+
+#[cfg(feature = "developer")]
+#[tauri::command]
+async fn prepare_player_app_release(
+    app: AppHandle,
+    request: AppReleaseRequest,
+) -> Result<AppReleasePreview, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        activity::track(
+            &app,
+            "Player app release preview",
+            ActivityKind::Publishing,
+            "Verifying the packaged Player executable, installer and build manifest",
+            || app_update_publisher::prepare(&app, &request),
+            |preview| (preview.ready, preview.message.clone()),
+        )
+    })
+    .await
+    .map_err(|error| format!("Player app release preview task failed: {error}"))?
+}
+
+#[cfg(feature = "developer")]
+#[tauri::command]
+async fn publish_player_app_release(
+    app: AppHandle,
+    preview_id: String,
+    confirmed: bool,
+) -> Result<AppReleasePublication, String> {
+    if activity::has_active(&app)? {
+        return Err(
+            "Wait for current launcher activity to finish before publishing an app release".into(),
+        );
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        activity::track(
+            &app,
+            "Player app release publication",
+            ActivityKind::Publishing,
+            "Revalidating and publishing the confirmed immutable Player release",
+            || app_update_publisher::publish(&preview_id, confirmed),
+            |publication| (true, publication.message.clone()),
+        )
+    })
+    .await
+    .map_err(|error| format!("Player app release publication task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -902,6 +1015,12 @@ pub fn run() {
         clean_storage,
         prepare_support_bundle,
         create_support_bundle,
+        check_app_update,
+        app_update_result,
+        prepare_app_update,
+        apply_app_update,
+        prepare_player_app_release,
+        publish_player_app_release,
         refresh_public_catalog,
         select_profile,
         save_profile,
@@ -938,6 +1057,10 @@ pub fn run() {
         clean_storage,
         prepare_support_bundle,
         create_support_bundle,
+        check_app_update,
+        app_update_result,
+        prepare_app_update,
+        apply_app_update,
         refresh_public_catalog,
         select_profile,
         save_profile,
@@ -959,4 +1082,8 @@ pub fn run() {
     builder
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+pub fn try_run_update_helper() -> Option<i32> {
+    self_update::try_run_helper()
 }

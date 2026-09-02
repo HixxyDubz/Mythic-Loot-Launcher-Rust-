@@ -30,10 +30,11 @@ thiserror = "2"
 sha2 = "0.10"
 regex = "1.13"
 walkdir = "2.5"
-time = { version = "0.3", features = ["formatting"] }
+time = { version = "0.3", features = ["formatting", "parsing"] }
 zip = { version = "8.6", default-features = false, features = ["deflate"] }
 fs2 = "0.4"
 ureq = "3.4"
+semver = "1"
 base64 = { version = "0.22", optional = true }
 
 [target.'cfg(windows)'.dependencies]

@@ -131,6 +131,7 @@ function ActivityRow({ item }: { item: ActivityItem }) {
 function kindIcon(kind: ActivityKind) {
   switch (kind) {
     case "catalogue": return Download;
+    case "appUpdate": return RefreshCw;
     case "storage": return HardDrive;
     case "support": return Wrench;
     case "verifying": return SearchCheck;
@@ -146,6 +147,7 @@ function kindIcon(kind: ActivityKind) {
 function kindLabel(kind: ActivityKind): string {
   switch (kind) {
     case "catalogue": return "Catalogue";
+    case "appUpdate": return "App update";
     case "storage": return "Storage";
     case "support": return "Support";
     case "verifying": return "Verifying";

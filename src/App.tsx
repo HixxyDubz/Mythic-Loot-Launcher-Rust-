@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 import { EditionModpackManagerPanel, EditionPublisherPanel, launcherEdition, publisherAvailable } from "@launcher-edition";
-import { applyModpackTransaction, bootstrap, detectInstallations, launchProfile, prepareMinecraftBootstrap, prepareModpackTransaction, refreshPublicCatalog, saveProfile, selectProfile, verifyProfileFiles } from "./api";
+import { applyModpackTransaction, bootstrap, checkAppUpdate, detectInstallations, getAppUpdateResult, launchProfile, prepareMinecraftBootstrap, prepareModpackTransaction, refreshPublicCatalog, saveProfile, selectProfile, verifyProfileFiles } from "./api";
+import { AppUpdatePanel } from "./components/AppUpdatePanel";
 import { Dashboard } from "./components/Dashboard";
 import { ActivityPanel } from "./components/ActivityPanel";
 import { SafeLaunchPanel } from "./components/SafeLaunchPanel";
@@ -16,7 +17,7 @@ import type { BootstrapPayload, DetectedInstall, FileVerification, GameProfile }
 
 function App() {
   const [payload, setPayload] = useState<BootstrapPayload | null>(null);
-  const [page, setPage] = useState<"dashboard" | "activity" | "storage" | "support" | "settings" | "modpacks" | "publisher" | "update" | "safeLaunch" | "smartLaunch">("dashboard");
+  const [page, setPage] = useState<"dashboard" | "activity" | "storage" | "support" | "appUpdate" | "settings" | "modpacks" | "publisher" | "update" | "safeLaunch" | "smartLaunch">("dashboard");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [fatalError, setFatalError] = useState("");
@@ -37,6 +38,16 @@ function App() {
           .catch(() => undefined);
       })
       .catch((error) => setFatalError(errorMessage(error)));
+    void checkAppUpdate()
+      .then((update) => {
+        if (update.canInstall) setNotice(update.message);
+      })
+      .catch(() => undefined);
+    void getAppUpdateResult()
+      .then((result) => {
+        if (result) setNotice(result.message);
+      })
+      .catch(() => undefined);
   }, []);
 
   const selectedProfile = useMemo(
@@ -169,6 +180,7 @@ function App() {
             onActivity={() => setPage("activity")}
             onStorage={() => setPage("storage")}
             onSupport={() => setPage("support")}
+            onAppUpdate={() => setPage("appUpdate")}
             onPublisher={() => setPage("publisher")}
             onAddModpack={() => setPage("modpacks")}
           />
@@ -179,6 +191,8 @@ function App() {
               <StoragePanel onBack={() => setPage("dashboard")} onNotice={setNotice} />
             ) : page === "support" ? (
               <SupportPanel key={selectedProfile.id} profile={selectedProfile} onBack={() => setPage("dashboard")} onNotice={setNotice} />
+            ) : page === "appUpdate" ? (
+              <AppUpdatePanel onBack={() => setPage("dashboard")} onNotice={setNotice} />
             ) : publisherAvailable && page === "modpacks" ? (
               <EditionModpackManagerPanel
                 games={payload.games}

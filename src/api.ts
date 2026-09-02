@@ -1,6 +1,13 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import type {
   ActivityItem,
+  AppReleasePreview,
+  AppReleasePublication,
+  AppReleaseRequest,
+  AppUpdateApplyOutcome,
+  AppUpdatePreview,
+  AppUpdateResult,
+  AppUpdateStage,
   BootstrapPayload,
   CatalogPreview,
   CatalogPublication,
@@ -84,6 +91,42 @@ export async function createSupportBundle(
 ): Promise<SupportBundleOutcome> {
   requireNative("Support bundle export");
   return invoke<SupportBundleOutcome>("create_support_bundle", { previewId, confirmed });
+}
+
+export async function checkAppUpdate(): Promise<AppUpdatePreview> {
+  requireNative("App update check");
+  return invoke<AppUpdatePreview>("check_app_update");
+}
+
+export async function getAppUpdateResult(): Promise<AppUpdateResult | null> {
+  requireNative("App update result");
+  return invoke<AppUpdateResult | null>("app_update_result");
+}
+
+export async function prepareAppUpdate(previewId: string): Promise<AppUpdateStage> {
+  requireNative("Player app update download");
+  return invoke<AppUpdateStage>("prepare_app_update", { previewId });
+}
+
+export async function applyAppUpdate(
+  stageId: string,
+  confirmed: boolean,
+): Promise<AppUpdateApplyOutcome> {
+  requireNative("Player app update installation");
+  return invoke<AppUpdateApplyOutcome>("apply_app_update", { stageId, confirmed });
+}
+
+export async function preparePlayerAppRelease(request: AppReleaseRequest): Promise<AppReleasePreview> {
+  requireNative("Player app release preparation");
+  return invoke<AppReleasePreview>("prepare_player_app_release", { request });
+}
+
+export async function publishPlayerAppRelease(
+  previewId: string,
+  confirmed: boolean,
+): Promise<AppReleasePublication> {
+  requireNative("Player app release publication");
+  return invoke<AppReleasePublication>("publish_player_app_release", { previewId, confirmed });
 }
 
 export async function refreshPublicCatalog(): Promise<CatalogRefreshOutcome> {

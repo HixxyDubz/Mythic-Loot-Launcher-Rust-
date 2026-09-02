@@ -1,4 +1,4 @@
-import { Activity, ChevronRight, CloudUpload, Gamepad2, HardDrive, LifeBuoy, Plus, Settings } from "lucide-react";
+import { Activity, ChevronRight, CloudUpload, Gamepad2, HardDrive, LifeBuoy, Plus, RefreshCw, Settings } from "lucide-react";
 import type { GameProfile, ProfileHealth } from "../types";
 
 interface SidebarProps {
@@ -12,11 +12,12 @@ interface SidebarProps {
   onActivity: () => void;
   onStorage: () => void;
   onSupport: () => void;
+  onAppUpdate: () => void;
   onPublisher: () => void;
   onAddModpack: () => void;
 }
 
-export function Sidebar({ profiles, health, selectedId, edition, publisherAvailable, onSelect, onSettings, onActivity, onStorage, onSupport, onPublisher, onAddModpack }: SidebarProps) {
+export function Sidebar({ profiles, health, selectedId, edition, publisherAvailable, onSelect, onSettings, onActivity, onStorage, onSupport, onAppUpdate, onPublisher, onAddModpack }: SidebarProps) {
   return (
     <aside className="sidebar">
       <div className="brand-lockup">
@@ -66,6 +67,9 @@ export function Sidebar({ profiles, health, selectedId, edition, publisherAvaila
         </button>
         <button onClick={onSupport}>
           <LifeBuoy size={17} /> Support
+        </button>
+        <button onClick={onAppUpdate}>
+          <RefreshCw size={17} /> App update
         </button>
         {publisherAvailable && (
           <button onClick={onPublisher}>
