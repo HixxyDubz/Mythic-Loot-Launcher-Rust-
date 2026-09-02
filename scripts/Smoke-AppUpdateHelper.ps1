@@ -13,7 +13,7 @@ $stageRoot = Join-Path $dataRoot "app-update-staging\fixture"
 $installRoot = Join-Path $smokeRoot "install"
 $target = Join-Path $installRoot "Mythic Loot Launcher Player.exe"
 $staged = Join-Path $stageRoot "player.next.exe"
-$helper = Join-Path $stageRoot "mythic-update-helper.exe"
+$helper = Join-Path $stageRoot "mythic-restart-agent.exe"
 $backup = Join-Path $stageRoot "player.previous.exe"
 $journalPath = Join-Path $stageRoot "apply-update.json"
 $resultPath = Join-Path $dataRoot "app-update-last-result.json"
@@ -122,8 +122,14 @@ try {
     [System.IO.File]::WriteAllText($journalPath, $journalJson, [System.Text.UTF8Encoding]::new($false))
 
     $env:MYTHIC_LOOT_DATA_DIR = $dataRoot
-    $arguments = @("--mythic-loot-apply-update", "`"$journalPath`"", "0")
-    $helperProcess = Start-Process -FilePath $helper -ArgumentList $arguments -PassThru -WindowStyle Hidden
+    # Match Rust's std::process::Command/CreateProcess path exactly. ShellExecute can
+    # hide accidental UAC installer detection by elevating instead of returning 740.
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $helper
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.Arguments = "--mythic-loot-apply-update `"$journalPath`" 0"
+    $helperProcess = [System.Diagnostics.Process]::Start($startInfo)
     if (-not $helperProcess.WaitForExit(15000)) {
         Stop-Process -Id $helperProcess.Id -Force -ErrorAction SilentlyContinue
         throw "Packaged update helper did not exit within 15 seconds"

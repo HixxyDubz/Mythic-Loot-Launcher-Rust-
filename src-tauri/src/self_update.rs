@@ -37,6 +37,8 @@ const FEED_SCHEMA_VERSION: u32 = 1;
 #[cfg_attr(not(feature = "developer"), allow(dead_code))]
 const MINIMUM_DIRECT_UPDATE_VERSION: &str = "0.1.0";
 const HELPER_SCHEMA_VERSION: u32 = 1;
+#[cfg_attr(debug_assertions, allow(dead_code))]
+const HELPER_FILE_NAME: &str = "mythic-restart-agent.exe";
 const MAX_FEED_BYTES: usize = 256 * 1024;
 const MAX_APP_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_CACHED_PLANS: usize = 4;
@@ -237,7 +239,10 @@ pub fn apply(stage_id: &str, confirmed: bool) -> Result<AppUpdateApplyOutcome, S
             .cloned()
             .ok_or_else(|| "Staged app update expired; download it again".to_string())?;
         validate_staged_plan(&plan)?;
-        let helper = plan.stage_dir.join("mythic-update-helper.exe");
+        // Windows applies installer-detection heuristics to unmanifested executables.
+        // In particular, a filename containing "update" can make CreateProcess return
+        // ERROR_ELEVATION_REQUIRED even though this helper only replaces user-owned files.
+        let helper = plan.stage_dir.join(HELPER_FILE_NAME);
         fs::copy(&plan.target_exe, &helper)
             .map_err(|error| format!("Could not create the isolated app update helper: {error}"))?;
         if manifest::sha256(&helper)? != plan.target_sha256 {
@@ -973,6 +978,14 @@ mod tests {
     fn app_update_confirmation_is_fail_closed() {
         assert!(require_confirmation(false).is_err());
         assert!(require_confirmation(true).is_ok());
+    }
+
+    #[test]
+    fn helper_filename_avoids_windows_installer_detection_keywords() {
+        let helper_name = HELPER_FILE_NAME.to_ascii_lowercase();
+        for keyword in ["install", "setup", "update", "patch"] {
+            assert!(!helper_name.contains(keyword));
+        }
     }
 
     #[test]

@@ -1,6 +1,6 @@
 [package]
 name = "mythic-loot-launcher"
-version = "0.1.1"
+version = "0.1.2"
 description = "A Rust-powered modpack launcher and GitHub publishing companion"
 authors = ["HixxyDubz"]
 edition = "2024"
