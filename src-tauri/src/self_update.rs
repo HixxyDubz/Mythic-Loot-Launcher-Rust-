@@ -1043,7 +1043,10 @@ mod tests {
                 .display()
                 .to_string(),
             target_sha256: "1".repeat(64),
-            staged_exe: canonical_stage.join("player.next.exe").display().to_string(),
+            staged_exe: canonical_stage
+                .join("player.next.exe")
+                .display()
+                .to_string(),
             staged_bytes: 2,
             staged_sha256: "2".repeat(64),
             backup_exe: canonical_stage
