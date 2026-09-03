@@ -20,6 +20,7 @@ $target = Join-Path $installRoot "Mythic Loot Launcher Player.exe"
 $driver = Join-Path $PSScriptRoot "Drive-LiveAppUpdate.mjs"
 $playerProcess = $null
 $restartProcess = $null
+$testPassed = $false
 
 function Get-Sha256Hex {
     param([Parameter(Mandatory = $true)][string]$Path)
@@ -144,6 +145,7 @@ try {
     }
 
     Write-Host "Live Player update passed: $FromVersion -> $ExpectedVersion through the real GitHub feed, WebView review/download/confirmation, verified replacement, exact backup, result journal and responsive restart."
+    $testPassed = $true
 }
 finally {
     Stop-TestProcess -Process $restartProcess
@@ -155,7 +157,10 @@ finally {
         [System.IO.Path]::GetFileName($resolvedSmokeRoot) -notmatch '^live-app-update-smoke-[0-9a-f]{32}$') {
         throw "Live app-update smoke cleanup target escaped the Windows artifacts directory: $resolvedSmokeRoot"
     }
-    if (Test-Path -LiteralPath $resolvedSmokeRoot -PathType Container) {
+    if ($testPassed -and (Test-Path -LiteralPath $resolvedSmokeRoot -PathType Container)) {
         Remove-Item -LiteralPath $resolvedSmokeRoot -Recurse -Force
+    }
+    elseif (-not $testPassed -and (Test-Path -LiteralPath $resolvedSmokeRoot -PathType Container)) {
+        Write-Warning "Preserved failed live update evidence at $resolvedSmokeRoot"
     }
 }
