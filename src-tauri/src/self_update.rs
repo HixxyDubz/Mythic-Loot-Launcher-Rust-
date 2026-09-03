@@ -631,15 +631,38 @@ fn load_helper_journal(path: &Path) -> Result<HelperJournal, String> {
     let journal_parent = path
         .parent()
         .ok_or_else(|| "App update journal has no staging folder".to_string())?;
-    if Path::new(&journal.staged_exe).parent() != Some(journal_parent)
-        || Path::new(&journal.backup_exe).parent() != Some(journal_parent)
-        || Path::new(&journal.result_path).parent()
-            != journal_parent.parent().and_then(Path::parent)
+    let journal_parent = canonical_directory(journal_parent, "app update staging folder")?;
+    let staged_parent = canonical_parent(&journal.staged_exe, "staged Player executable")?;
+    let backup_parent = canonical_parent(&journal.backup_exe, "previous Player backup")?;
+    let result_parent = canonical_parent(&journal.result_path, "app update result")?;
+    let expected_result_parent = journal_parent
+        .parent()
+        .and_then(Path::parent)
+        .ok_or_else(|| "App update staging folder has no launcher data root".to_string())?;
+    if staged_parent != journal_parent
+        || backup_parent != journal_parent
+        || result_parent != expected_result_parent
         || Path::new(&journal.result_path).file_name() != Some(OsStr::new(UPDATE_RESULT_FILE))
     {
         return Err("App update journal paths escaped launcher-owned staging".into());
     }
     Ok(journal)
+}
+
+fn canonical_parent(value: &str, label: &str) -> Result<PathBuf, String> {
+    let parent = Path::new(value)
+        .parent()
+        .ok_or_else(|| format!("{label} has no parent folder"))?;
+    canonical_directory(parent, &format!("{label} parent folder"))
+}
+
+fn canonical_directory(path: &Path, label: &str) -> Result<PathBuf, String> {
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|error| format!("Could not inspect {label}: {error}"))?;
+    if is_link_like(&metadata) || !metadata.is_dir() {
+        return Err(format!("{label} is linked or not a directory"));
+    }
+    fs::canonicalize(path).map_err(|error| format!("Could not resolve {label}: {error}"))
 }
 
 fn validate_helper_journal(journal: &HelperJournal) -> Result<(), String> {
@@ -1001,6 +1024,37 @@ mod tests {
         for keyword in ["install", "setup", "update", "patch"] {
             assert!(!helper_name.contains(keyword));
         }
+    }
+
+    #[test]
+    fn helper_journal_accepts_equivalent_canonical_and_display_paths() {
+        let root = tempfile::tempdir().unwrap();
+        let data = root.path().join("data");
+        let stage = data.join(UPDATE_STAGING_DIRECTORY).join("fixture");
+        fs::create_dir_all(&stage).unwrap();
+        let canonical_stage = fs::canonicalize(&stage).unwrap();
+        let journal_path = canonical_stage.join("apply-update.json");
+        let journal = HelperJournal {
+            schema_version: HELPER_SCHEMA_VERSION,
+            version: "0.2.0".into(),
+            target_exe: root
+                .path()
+                .join("Mythic Loot Launcher Player.exe")
+                .display()
+                .to_string(),
+            target_sha256: "1".repeat(64),
+            staged_exe: canonical_stage.join("player.next.exe").display().to_string(),
+            staged_bytes: 2,
+            staged_sha256: "2".repeat(64),
+            backup_exe: canonical_stage
+                .join("player.previous.exe")
+                .display()
+                .to_string(),
+            result_path: data.join(UPDATE_RESULT_FILE).display().to_string(),
+            restart_probe: false,
+        };
+        fs::write(&journal_path, serde_json::to_vec(&journal).unwrap()).unwrap();
+        assert!(load_helper_journal(&journal_path).is_ok());
     }
 
     #[test]
