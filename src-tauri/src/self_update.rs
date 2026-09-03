@@ -153,9 +153,16 @@ static FEED_PLANS: OnceLock<Mutex<HashMap<String, FeedPlan>>> = OnceLock::new();
 static STAGED_PLANS: OnceLock<Mutex<HashMap<String, StagedPlan>>> = OnceLock::new();
 
 pub fn check() -> Result<AppUpdatePreview, String> {
-    let bytes = remote::fetch_https(APP_UPDATE_FEED_URL, MAX_FEED_BYTES)?;
+    // GitHub's `/releases/latest/download` redirect can remain cached briefly
+    // after a new release becomes latest. A per-check query forces the redirect
+    // to be re-resolved while keeping the trusted repository/path fixed in Rust.
+    let bytes = remote::fetch_https(&feed_check_url(unix_nanos()), MAX_FEED_BYTES)?;
     let feed = parse_feed(&bytes)?;
     preview_feed(feed, true)
+}
+
+fn feed_check_url(nonce: u128) -> String {
+    format!("{APP_UPDATE_FEED_URL}?check={nonce}")
 }
 
 pub fn prepare(app: &AppHandle, preview_id: &str) -> Result<AppUpdateStage, String> {
@@ -978,6 +985,14 @@ mod tests {
     fn app_update_confirmation_is_fail_closed() {
         assert!(require_confirmation(false).is_err());
         assert!(require_confirmation(true).is_ok());
+    }
+
+    #[test]
+    fn feed_check_revalidates_the_fixed_latest_release_url() {
+        assert_eq!(
+            feed_check_url(123),
+            format!("{APP_UPDATE_FEED_URL}?check=123")
+        );
     }
 
     #[test]
