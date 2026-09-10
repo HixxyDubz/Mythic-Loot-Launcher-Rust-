@@ -5,6 +5,32 @@ const RESERVED_WINDOWS_NAMES: &[&str] = &[
     "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 ];
 
+/// Refuse redirects anywhere in an existing path, including dangling links.
+pub fn reject_link_path(path: &Path) -> Result<(), String> {
+    for part in path.ancestors() {
+        match std::fs::symlink_metadata(part) {
+            Ok(metadata) => {
+                #[cfg(windows)]
+                let linked = {
+                    use std::os::windows::fs::MetadataExt;
+                    metadata.file_attributes() & 0x400 != 0
+                };
+                #[cfg(not(windows))]
+                let linked = metadata.file_type().is_symlink();
+                if linked {
+                    return Err(format!(
+                        "Linked or redirected path is not allowed: {}",
+                        part.display()
+                    ));
+                }
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(format!("Could not inspect {}: {error}", part.display())),
+        }
+    }
+    Ok(())
+}
+
 pub fn normalize_relative(value: &str) -> Result<String, String> {
     let candidate = value.replace('\\', "/");
     if candidate.trim().is_empty() || candidate.contains('\0') {

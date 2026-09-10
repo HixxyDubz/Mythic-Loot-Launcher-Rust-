@@ -1,6 +1,8 @@
 param(
-    [string]$FromVersion = "0.1.0",
-    [string]$ExpectedVersion = ""
+    [string]$FromVersion = "0.1.7",
+    [string]$ExpectedVersion = "",
+    [ValidateSet("Mythic-Loot-Launcher-Player.exe", "Mythic Loot Launcher Player.exe", "mythic-loot-launcher.exe")]
+    [string]$TargetFileName = "Mythic-Loot-Launcher-Player.exe"
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,7 +18,7 @@ $feedUrl = "https://github.com/HixxyDubz/Mythic-Loot-Launcher-Rust-/releases/lat
 $smokeRoot = Join-Path $artifactRoot ("live-app-update-smoke-" + [guid]::NewGuid().ToString("N"))
 $installRoot = Join-Path $smokeRoot "install"
 $dataRoot = Join-Path $smokeRoot "data"
-$target = Join-Path $installRoot "Mythic Loot Launcher Player.exe"
+$target = Join-Path $installRoot $TargetFileName
 $driver = Join-Path $PSScriptRoot "Drive-LiveAppUpdate.mjs"
 $playerProcess = $null
 $restartProcess = $null
@@ -56,7 +58,7 @@ if (-not (Test-Path -LiteralPath $driver -PathType Leaf)) {
     throw "Live update WebView driver was not found at $driver"
 }
 
-$feed = Invoke-RestMethod -Uri $feedUrl -Method Get -TimeoutSec 30
+$feed = Invoke-RestMethod -Uri ($feedUrl + "?check=" + [guid]::NewGuid().ToString("N")) -Method Get -TimeoutSec 30
 if ($feed.schemaVersion -ne 1 -or $feed.product -ne "Mythic Loot Launcher" -or $feed.edition -ne "player" -or $feed.version -ne $ExpectedVersion) {
     throw "The live Player feed is not the expected $ExpectedVersion release"
 }

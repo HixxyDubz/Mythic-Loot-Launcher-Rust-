@@ -233,9 +233,10 @@ export async function prepareModpackTransaction(
 export async function applyModpackTransaction(
   previewId: string,
   confirmed: boolean,
+  profileId: string,
 ): Promise<TransactionOutcome> {
   requireNative("Modpack updates and repairs");
-  return invoke<TransactionOutcome>("apply_modpack_transaction", { previewId, confirmed });
+  return invoke<TransactionOutcome>("apply_modpack_transaction", { previewId, confirmed, profileId });
 }
 
 export async function listRestorePoints(profileId: string): Promise<RestorePointSummary[]> {
@@ -254,9 +255,10 @@ export async function prepareRestorePoint(
 export async function applyRestorePoint(
   previewId: string,
   confirmed: boolean,
+  profileId: string,
 ): Promise<RestoreOutcome> {
   requireNative("Restore-point application");
-  return invoke<RestoreOutcome>("apply_restore_point", { previewId, confirmed });
+  return invoke<RestoreOutcome>("apply_restore_point", { previewId, confirmed, profileId });
 }
 
 export async function deleteRestorePoint(

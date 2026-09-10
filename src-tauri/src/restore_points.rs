@@ -253,6 +253,7 @@ pub fn prepare(
     profile_id: &str,
     backup_id: &str,
 ) -> Result<RestorePreview, String> {
+    let _operation = crate::operations::MaintenanceGuard::acquire()?;
     let config = storage::load_or_create(app)?;
     let profile = config
         .profiles
@@ -262,26 +263,49 @@ pub fn prepare(
     prepare_at(profile, backup_id, &storage::data_dir(app)?, true)
 }
 
-pub fn apply(app: &AppHandle, preview_id: &str, confirmed: bool) -> Result<RestoreOutcome, String> {
+pub fn apply(
+    app: &AppHandle,
+    profile_id: &str,
+    preview_id: &str,
+    confirmed: bool,
+) -> Result<RestoreOutcome, String> {
     if !confirmed {
         return Err("Restoring a backup requires explicit confirmation".into());
     }
+    let _operation = crate::operations::MaintenanceGuard::acquire()?;
     let plan = restore_plans()
         .lock()
         .map_err(|_| "Restore preview cache is unavailable".to_string())?
         .remove(preview_id)
         .ok_or_else(|| "Prepare a fresh restore preview before applying".to_string())?;
-    let mut config = storage::load_or_create(app)?;
+    let config = storage::load_or_create(app)?;
+    crate::updater::require_profile_match(
+        profile_id,
+        &plan.profile_id,
+        &config.selected_profile_id,
+    )?;
     let profile = config
         .profiles
-        .iter_mut()
+        .iter()
         .find(|profile| profile.id == plan.profile_id)
         .ok_or_else(|| "The previewed modpack profile no longer exists".to_string())?;
     if plan.install_dir != Path::new(profile.install_dir.trim()) {
         return Err("The modpack folder changed after preview; prepare again".into());
     }
-    profile.local_modpack_version = plan.metadata.local_modpack_version.clone();
-    execute_plan(&plan, None, || storage::save(app, &config))
+    execute_plan(&plan, None, || {
+        storage::update(app, |config| {
+            let profile = config
+                .profiles
+                .iter_mut()
+                .find(|p| p.id == plan.profile_id)
+                .ok_or("The restored modpack profile no longer exists")?;
+            if Path::new(&profile.install_dir) != plan.install_dir {
+                return Err("The modpack folder changed during restore".into());
+            }
+            profile.local_modpack_version = plan.metadata.local_modpack_version.clone();
+            Ok(())
+        })
+    })
 }
 
 pub fn delete(
@@ -290,6 +314,7 @@ pub fn delete(
     backup_id: &str,
     confirmed: bool,
 ) -> Result<String, String> {
+    let _operation = crate::operations::MaintenanceGuard::acquire()?;
     if !confirmed {
         return Err("Deleting a restore point requires explicit confirmation".into());
     }

@@ -124,6 +124,7 @@ struct ReleaseAsset {
 static RELEASE_PLANS: OnceLock<Mutex<HashMap<String, ReleasePlan>>> = OnceLock::new();
 
 pub fn prepare(app: &AppHandle, request: &PackageRequest) -> Result<PackagePreview, String> {
+    let _operation = crate::operations::MaintenanceGuard::acquire()?;
     let config = storage::load_or_create(app)?;
     let profile = config
         .profiles

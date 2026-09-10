@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useOperationScope } from "../useOperationScope";
 import {
   ArchiveRestore,
   ArrowLeft,
@@ -39,16 +40,23 @@ interface UpdatePanelProps {
   onBack: () => void;
   onNotice: (message: string) => void;
   onCompleted: () => Promise<void>;
+  onBusyChange?: (busy: boolean) => void;
 }
 
-export function UpdatePanel({
+export function UpdatePanel(props: UpdatePanelProps) {
+  return <UpdateSession key={`${props.profile.id}|${props.profile.installDir}`} {...props} />;
+}
+
+function UpdateSession({
   profile,
   health,
   manifest,
   onBack,
   onNotice,
   onCompleted,
+  onBusyChange,
 }: UpdatePanelProps) {
+  const scope = useOperationScope();
   const [busy, setBusy] = useState(false);
   const [busyKind, setBusyKind] = useState<TransactionKind | null>(null);
   const [preview, setPreview] = useState<TransactionPreview | null>(null);
@@ -61,6 +69,11 @@ export function UpdatePanel({
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
   const [restoreBusy, setRestoreBusy] = useState(false);
+  const working = busy || restoreBusy;
+  useEffect(() => {
+    onBusyChange?.(working);
+    return () => onBusyChange?.(false);
+  }, [working, onBusyChange]);
 
   useEffect(() => {
     setRestorePreview(null);
@@ -70,14 +83,18 @@ export function UpdatePanel({
   }, [profile.id]);
 
   async function loadRestorePoints() {
+    const current = scope();
     try {
-      setRestorePoints(await listRestorePoints(profile.id));
+      const points = await listRestorePoints(profile.id);
+      if (current()) setRestorePoints(points);
     } catch (error) {
-      onNotice(errorMessage(error));
+      if (current()) onNotice(errorMessage(error));
     }
   }
 
   async function prepare(kind: TransactionKind) {
+    if (working) return;
+    const current = scope();
     setBusy(true);
     setBusyKind(kind);
     setPreview(null);
@@ -85,38 +102,43 @@ export function UpdatePanel({
     setOutcome(null);
     try {
       const result = await prepareModpackTransaction({ profileId: profile.id, kind });
+      if (!current()) return;
+      if (result.profileId !== profile.id) throw new Error("The candidate belongs to a different modpack. Prepare it again.");
       setPreview(result);
       onNotice(result.message);
     } catch (error) {
-      onNotice(errorMessage(error));
+      if (current()) onNotice(errorMessage(error));
     } finally {
-      setBusy(false);
-      setBusyKind(null);
+      if (current()) { setBusy(false); setBusyKind(null); }
     }
   }
 
   async function apply() {
-    if (!preview) return;
+    if (!preview || !confirmed || working || preview.profileId !== profile.id) return;
+    const current = scope();
     setBusy(true);
     setBusyKind(preview.kind);
     try {
-      const result = await applyModpackTransaction(preview.previewId, confirmed);
+      const result = await applyModpackTransaction(preview.previewId, confirmed, profile.id);
+      if (!current()) return;
       setOutcome(result);
       setConfirmed(false);
       onNotice(result.message);
       if (result.success) {
         await onCompleted();
+        if (!current()) return;
         await loadRestorePoints();
       }
     } catch (error) {
-      onNotice(errorMessage(error));
+      if (current()) onNotice(errorMessage(error));
     } finally {
-      setBusy(false);
-      setBusyKind(null);
+      if (current()) { setBusy(false); setBusyKind(null); }
     }
   }
 
   async function reviewRestore(point: RestorePointSummary) {
+    if (working) return;
+    const current = scope();
     setRestoreBusy(true);
     setRestorePreview(null);
     setRestoreOutcome(null);
@@ -124,49 +146,56 @@ export function UpdatePanel({
     setDeleteTarget(null);
     try {
       const result = await prepareRestorePoint(profile.id, point.backupId);
+      if (!current()) return;
+      if (result.profileId !== profile.id) throw new Error("The restore candidate belongs to a different modpack. Review it again.");
       setRestorePreview(result);
       onNotice(result.message);
     } catch (error) {
-      onNotice(errorMessage(error));
+      if (current()) onNotice(errorMessage(error));
     } finally {
-      setRestoreBusy(false);
+      if (current()) setRestoreBusy(false);
     }
   }
 
   async function restore() {
-    if (!restorePreview) return;
+    if (!restorePreview || !restoreConfirmed || working || restorePreview.profileId !== profile.id) return;
+    const current = scope();
     setRestoreBusy(true);
     try {
-      const result = await applyRestorePoint(restorePreview.previewId, restoreConfirmed);
+      const result = await applyRestorePoint(restorePreview.previewId, restoreConfirmed, profile.id);
+      if (!current()) return;
       setRestoreOutcome(result);
       setRestoreConfirmed(false);
       onNotice(result.message);
       if (result.success) {
         setRestorePreview(null);
         await onCompleted();
+        if (!current()) return;
         await loadRestorePoints();
       }
     } catch (error) {
-      onNotice(errorMessage(error));
+      if (current()) onNotice(errorMessage(error));
     } finally {
-      setRestoreBusy(false);
+      if (current()) setRestoreBusy(false);
     }
   }
 
   async function removeRestorePoint() {
-    if (!deleteTarget) return;
+    if (!deleteTarget || !deleteConfirmed || working) return;
+    const current = scope();
     setRestoreBusy(true);
     try {
       const message = await deleteRestorePoint(profile.id, deleteTarget, deleteConfirmed);
+      if (!current()) return;
       onNotice(message);
       setDeleteTarget(null);
       setDeleteConfirmed(false);
       setRestorePreview((current) => current?.backupId === deleteTarget ? null : current);
       await loadRestorePoints();
     } catch (error) {
-      onNotice(errorMessage(error));
+      if (current()) onNotice(errorMessage(error));
     } finally {
-      setRestoreBusy(false);
+      if (current()) setRestoreBusy(false);
     }
   }
 
@@ -175,7 +204,7 @@ export function UpdatePanel({
   return (
     <main className="settings-page update-page">
       <div className="settings-header">
-        <button className="back-button" onClick={onBack} disabled={busy}><ArrowLeft size={18} /> Back</button>
+        <button className="back-button" onClick={onBack} disabled={working}><ArrowLeft size={18} /> Back</button>
         <div><span className="eyebrow">SAFE MODPACK MAINTENANCE</span><h1>Update & Repair</h1></div>
         <div className={`readiness-pill ${health.status}`}><i /> {healthLabel(health.status)}</div>
       </div>
@@ -194,7 +223,7 @@ export function UpdatePanel({
           <article className="settings-section panel-card transaction-choice">
             <Download />
             <div><span className="eyebrow">VERSION CHANGE</span><h2>Prepare update</h2><p>Stages the trusted release package. Unchanged required files may remain safely in the live installation.</p></div>
-            <button className="primary-action" onClick={() => void prepare('update')} disabled={!configured || busy}>
+            <button className="primary-action" onClick={() => void prepare('update')} disabled={!configured || working}>
               {busyKind === 'update' ? <RefreshCw className="spin" size={17} /> : <Download size={17} />}
               {busyKind === 'update' ? 'Downloading & verifying…' : 'Prepare update safely'}
             </button>
@@ -203,7 +232,7 @@ export function UpdatePanel({
           <article className="settings-section panel-card transaction-choice">
             <Wrench />
             <div><span className="eyebrow">FILE HEALTH</span><h2>Prepare repair</h2><p>Compares every required hash, then stages and applies only missing or mismatched files from the trusted package.</p></div>
-            <button className="secondary-action" onClick={() => void prepare('repair')} disabled={!configured || busy}>
+            <button className="secondary-action" onClick={() => void prepare('repair')} disabled={!configured || working}>
               {busyKind === 'repair' ? <RefreshCw className="spin" size={17} /> : <Wrench size={17} />}
               {busyKind === 'repair' ? 'Checking & staging…' : 'Prepare changed files only'}
             </button>
@@ -220,6 +249,8 @@ export function UpdatePanel({
           <section className={`settings-section panel-card transaction-preview ${preview.ready ? 'ready' : 'nothing'}`}>
             <div className="section-title">{preview.ready ? <ShieldCheck /> : <CheckCircle2 />}<div><h2>{preview.ready ? `${titleKind(preview.kind)} candidate verified` : 'Nothing needs repair'}</h2><p>{preview.message}</p></div></div>
             <dl className="pack-facts preview-facts">
+              <div><dt>Modpack</dt><dd>{profile.displayName}</dd></div>
+              <div><dt>Installation folder</dt><dd>{profile.installDir}</dd></div>
               <div><dt>Target version</dt><dd>{preview.version}</dd></div>
               <div><dt>Staged payload</dt><dd>{preview.stagedFiles.toLocaleString()} files · {formatBytes(preview.stagedBytes)}</dd></div>
               <div><dt>Existing files backed up</dt><dd>{preview.existingFilesToBackup.toLocaleString()}</dd></div>
@@ -231,7 +262,7 @@ export function UpdatePanel({
               <>
                 <div className="safety-note transaction-backup-note"><HardDrive size={15} /> A validated pre-change backup is created immediately before the first live write. It remains available after success.</div>
                 <label className="confirmation-row"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span>I confirm that the launcher may back up and transactionally modify this modpack installation using the reviewed candidate.</span></label>
-                <button className="primary-action danger-action" onClick={() => void apply()} disabled={!confirmed || busy}>
+                <button className="primary-action danger-action" onClick={() => void apply()} disabled={!confirmed || working}>
                   {busy ? <RefreshCw className="spin" size={17} /> : <ShieldCheck size={17} />} Apply verified {preview.kind}
                 </button>
               </>
@@ -256,7 +287,7 @@ export function UpdatePanel({
           <div className="section-title">
             <ArchiveRestore />
             <div><h2>Recovery history</h2><p>Transactional backups are kept in launcher-owned storage. The newest five points are retained automatically.</p></div>
-            <button className="detect-button" onClick={() => void loadRestorePoints()} disabled={restoreBusy}><RefreshCw size={15} /> Refresh</button>
+            <button className="detect-button" onClick={() => void loadRestorePoints()} disabled={working}><RefreshCw size={15} /> Refresh</button>
           </div>
           {restorePoints.length === 0 ? (
             <div className="restore-empty"><HardDrive /><span><strong>No restore points yet</strong><small>A verified point is created immediately before the first live write of an update, repair, or restore.</small></span></div>
@@ -272,8 +303,8 @@ export function UpdatePanel({
                     {!point.valid && <small className="outcome-error">{point.issues[0] || 'This backup cannot be restored safely.'}</small>}
                   </div>
                   <div className="restore-actions">
-                    <button className="secondary-action" onClick={() => void reviewRestore(point)} disabled={!point.valid || restoreBusy}>Review restore</button>
-                    <button className="icon-danger" aria-label={`Delete ${backupLabel(point.label)}`} onClick={() => { setDeleteTarget(point.backupId); setDeleteConfirmed(false); }} disabled={restoreBusy}><Trash2 size={15} /></button>
+                    <button className="secondary-action" onClick={() => void reviewRestore(point)} disabled={!point.valid || working}>Review restore</button>
+                    <button className="icon-danger" aria-label={`Delete ${backupLabel(point.label)}`} onClick={() => { setDeleteTarget(point.backupId); setDeleteConfirmed(false); }} disabled={working}><Trash2 size={15} /></button>
                   </div>
                 </article>
               ))}
@@ -294,7 +325,7 @@ export function UpdatePanel({
             </dl>
             <div className="safety-note transaction-backup-note"><HardDrive size={15} /> A second recovery backup of the current installation is created before this restore changes any live path.</div>
             <label className="confirmation-row"><input type="checkbox" checked={restoreConfirmed} onChange={(event) => setRestoreConfirmed(event.target.checked)} /><span>I confirm that the launcher may create a recovery backup and transactionally restore this reviewed point.</span></label>
-            <button className="primary-action danger-action" onClick={() => void restore()} disabled={!restoreConfirmed || restoreBusy}>
+            <button className="primary-action danger-action" onClick={() => void restore()} disabled={!restoreConfirmed || working}>
               {restoreBusy ? <RefreshCw className="spin" size={17} /> : <ArchiveRestore size={17} />} Restore verified point
             </button>
           </section>
@@ -305,7 +336,7 @@ export function UpdatePanel({
             <ShieldAlert />
             <div><h2>Delete this restore point?</h2><p>This removes only the selected launcher-owned ZIP. It cannot be undone and does not change the live modpack.</p></div>
             <label className="confirmation-row"><input type="checkbox" checked={deleteConfirmed} onChange={(event) => setDeleteConfirmed(event.target.checked)} /><span>I understand this recovery file will be permanently deleted.</span></label>
-            <div className="delete-actions"><button className="secondary-action" onClick={() => { setDeleteTarget(null); setDeleteConfirmed(false); }}>Cancel</button><button className="primary-action danger-action" onClick={() => void removeRestorePoint()} disabled={!deleteConfirmed || restoreBusy}><Trash2 size={16} /> Delete restore point</button></div>
+            <div className="delete-actions"><button className="secondary-action" disabled={working} onClick={() => { setDeleteTarget(null); setDeleteConfirmed(false); }}>Cancel</button><button className="primary-action danger-action" onClick={() => void removeRestorePoint()} disabled={!deleteConfirmed || working}><Trash2 size={16} /> Delete restore point</button></div>
           </section>
         )}
 

@@ -126,6 +126,7 @@ pub fn clean(
     confirmed: bool,
 ) -> Result<StorageCleanupOutcome, String> {
     require_confirmation(confirmed)?;
+    let _operation = crate::operations::MaintenanceGuard::acquire()?;
     let data_dir = storage::data_dir(app)?;
     let config = storage::load_or_create(app)?;
     clean_at(&data_dir, &config.profiles, kind, SystemTime::now())

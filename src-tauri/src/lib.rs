@@ -9,10 +9,12 @@ mod content_editor;
 #[cfg(feature = "developer")]
 mod content_publisher;
 mod detection;
+mod download;
 mod launch;
 mod manifest;
 mod minecraft_setup;
 mod models;
+mod operations;
 #[cfg(feature = "developer")]
 mod packager;
 #[cfg(feature = "developer")]
@@ -41,7 +43,7 @@ use safe_launch::{SafeLaunchOutcome, SafeLaunchRecovery, SafeLaunchStatus};
 use self_update::{AppUpdateApplyOutcome, AppUpdatePreview, AppUpdateResult, AppUpdateStage};
 use storage_maintenance::{StorageCleanupKind, StorageCleanupOutcome, StorageReport};
 use support::{SupportBundleOutcome, SupportPreview};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use updater::{TransactionOutcome, TransactionPreview, TransactionRequest};
 
 #[cfg(feature = "developer")]
@@ -99,15 +101,13 @@ fn apply_release_publication(
 }
 
 fn payload(app: &AppHandle) -> Result<BootstrapPayload, String> {
+    #[cfg(feature = "developer")]
     let config = storage::load_or_create(app)?;
     #[cfg(not(feature = "developer"))]
-    let config = {
-        let mut config = config;
-        if catalog::apply_cached(app, &mut config)? {
-            storage::save(app, &config)?;
-        }
-        config
-    };
+    let config = storage::update(app, |config| {
+        catalog::apply_cached(app, config)?;
+        Ok(config.clone())
+    })?;
     let loaded: Vec<_> = config
         .profiles
         .iter()
@@ -293,14 +293,20 @@ async fn apply_app_update(
     }
     let task_app = app.clone();
     let outcome = tauri::async_runtime::spawn_blocking(move || {
-        activity::track(
+        let shutdown = operations::ShutdownGuard::begin()?;
+        let outcome = activity::track_shutdown(
             &task_app,
+            &shutdown,
             "Player app update installation",
             ActivityKind::AppUpdate,
             "Starting the verified external replacement helper",
             || self_update::apply(&stage_id, confirmed),
             |outcome| (outcome.helper_started, outcome.message.clone()),
-        )
+        )?;
+        if outcome.helper_started {
+            shutdown.commit();
+        }
+        Ok::<_, String>(outcome)
     })
     .await
     .map_err(|error| format!("App update installation task failed: {error}"))??;
@@ -361,21 +367,24 @@ async fn publish_player_app_release(
 
 #[tauri::command]
 fn select_profile(app: AppHandle, profile_id: String) -> Result<BootstrapPayload, String> {
-    let mut config = storage::load_or_create(&app)?;
-    if !config
-        .profiles
-        .iter()
-        .any(|profile| profile.id == profile_id)
-    {
-        return Err("That modpack profile does not exist".into());
-    }
-    config.selected_profile_id = profile_id;
-    storage::save(&app, &config)?;
+    let _work = operations::WorkGuard::begin()?;
+    storage::update(&app, |config| {
+        if !config
+            .profiles
+            .iter()
+            .any(|profile| profile.id == profile_id)
+        {
+            return Err("That modpack profile does not exist".into());
+        }
+        config.selected_profile_id = profile_id;
+        Ok(())
+    })?;
     payload(&app)
 }
 
 #[tauri::command]
-fn save_profile(app: AppHandle, profile: GameProfile) -> Result<BootstrapPayload, String> {
+fn save_profile(app: AppHandle, mut profile: GameProfile) -> Result<BootstrapPayload, String> {
+    let _operation = operations::MaintenanceGuard::acquire()?;
     if profile.display_name.trim().is_empty() {
         return Err("A modpack profile requires an id and display name".into());
     }
@@ -385,19 +394,28 @@ fn save_profile(app: AppHandle, profile: GameProfile) -> Result<BootstrapPayload
     {
         return Err("Discord invitations cannot be used as update or manifest sources".into());
     }
-    let mut config = storage::load_or_create(&app)?;
-    match config
-        .profiles
-        .iter_mut()
-        .find(|existing| existing.id == profile.id)
-    {
-        Some(existing) => *existing = profile,
-        None => {
-            config.selected_profile_id = profile.id.clone();
-            config.profiles.push(profile);
+    storage::update(&app, |config| {
+        match config
+            .profiles
+            .iter_mut()
+            .find(|existing| existing.id == profile.id)
+        {
+            Some(existing) => {
+                // This field is native-owned, not a value from a stale Settings tab.
+                profile.local_modpack_version = if existing.install_dir == profile.install_dir {
+                    existing.local_modpack_version.clone()
+                } else {
+                    String::new()
+                };
+                *existing = profile;
+            }
+            None => {
+                config.selected_profile_id = profile.id.clone();
+                config.profiles.push(profile);
+            }
         }
-    }
-    storage::save(&app, &config)?;
+        Ok(())
+    })?;
     payload(&app)
 }
 
@@ -590,8 +608,8 @@ async fn publish_modpack_release(
             || {
                 let published = packager::publish(&preview_id, confirmed)?;
                 let publication = published.publication;
-                let mut config = storage::load_or_create(&app)?;
-                apply_release_publication(&mut config, &publication)?;
+                storage::update(&app, |config| {
+                apply_release_publication(config, &publication)?;
                 let profile = config
                     .profiles
                     .iter()
@@ -611,7 +629,8 @@ async fn publish_modpack_release(
                         )
                     },
                 )?;
-                storage::save(&app, &config).map_err(|error| {
+                Ok(())
+                }).map_err(|error| {
                     format!(
                         "Release {} was published, but the local profile could not be updated: {error}",
                         publication.tag
@@ -768,6 +787,7 @@ async fn prepare_modpack_transaction(
 #[tauri::command]
 async fn apply_modpack_transaction(
     app: AppHandle,
+    profile_id: String,
     preview_id: String,
     confirmed: bool,
 ) -> Result<TransactionOutcome, String> {
@@ -777,7 +797,7 @@ async fn apply_modpack_transaction(
             "Modpack update or repair",
             ActivityKind::Updating,
             "Backing up and applying reviewed files",
-            || updater::apply(&app, &preview_id, confirmed),
+            || updater::apply(&app, &profile_id, &preview_id, confirmed),
             |outcome| {
                 (
                     outcome.success,
@@ -828,6 +848,7 @@ async fn prepare_restore_point(
 #[tauri::command]
 async fn apply_restore_point(
     app: AppHandle,
+    profile_id: String,
     preview_id: String,
     confirmed: bool,
 ) -> Result<RestoreOutcome, String> {
@@ -837,7 +858,7 @@ async fn apply_restore_point(
             "Modpack restore",
             ActivityKind::Restoring,
             "Backing up current files and restoring the reviewed point",
-            || restore_points::apply(&app, &preview_id, confirmed),
+            || restore_points::apply(&app, &profile_id, &preview_id, confirmed),
             |outcome| {
                 (
                     outcome.success,
@@ -926,6 +947,7 @@ async fn verify_profile_files(
             ActivityKind::Verifying,
             "Hashing required modpack files",
             || {
+                let _operation = operations::MaintenanceGuard::acquire()?;
                 let config = storage::load_or_create(&app)?;
                 let profile = config
                     .profiles
@@ -969,7 +991,9 @@ fn launch_profile(app: AppHandle, profile_id: String) -> Result<LaunchOutcome, S
         ActivityKind::Launching,
         "Checking readiness and starting the configured game",
         || {
+            let _operation = operations::MaintenanceGuard::acquire()?;
             let config = storage::load_or_create(&app)?;
+            updater::require_profile_match(&profile_id, &profile_id, &config.selected_profile_id)?;
             let profile = config
                 .profiles
                 .iter()
@@ -993,6 +1017,13 @@ fn launch_profile(app: AppHandle, profile_id: String) -> Result<LaunchOutcome, S
 pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event
+                && !operations::request_close() {
+                api.prevent_close();
+                let _ = window.emit("launcher-close-blocked", "Wait for current launcher work to finish before closing. Your files are being protected.");
+            }
+        })
         .setup(|app| {
             let window = app
                 .get_webview_window("main")
@@ -1080,8 +1111,19 @@ pub fn run() {
     ]);
 
     builder
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if let tauri::RunEvent::ExitRequested { api, .. } = event
+                && !operations::request_close()
+            {
+                api.prevent_exit();
+                let _ = app.emit(
+                    "launcher-close-blocked",
+                    "Wait for current launcher work to finish before closing.",
+                );
+            }
+        });
 }
 
 pub fn try_run_update_helper() -> Option<i32> {

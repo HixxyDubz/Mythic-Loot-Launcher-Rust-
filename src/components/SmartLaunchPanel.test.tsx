@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { testProfiles } from "../test/fixtures";
@@ -72,6 +72,19 @@ function renderPanel(overrides: Partial<ComponentProps<typeof SmartLaunchPanel>>
 }
 
 describe("Smart Launch", () => {
+  it("does not launch or stage an old profile after a pending check resolves", async () => {
+    let resolve!: (value: FileVerification) => void;
+    const onVerify = vi.fn(() => new Promise<FileVerification>((done) => { resolve = done; }));
+    const props = { profile, health, manifest, onBack: vi.fn(), onNotice: vi.fn(), onVerify,
+      onPrepare: vi.fn(), onApply: vi.fn(), onRefresh: vi.fn(), onLaunch: vi.fn() };
+    const view = render(<SmartLaunchPanel {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: /check and smart launch/i }));
+    view.rerender(<SmartLaunchPanel {...props} profile={{ ...profile, id: "another_pack" }} />);
+    await act(async () => resolve(cleanVerification));
+    expect(props.onLaunch).not.toHaveBeenCalled();
+    expect(props.onPrepare).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /check and smart launch/i })).toBeEnabled();
+  });
   it("opens a current installation only after a clean verification", async () => {
     const props = renderPanel();
 
@@ -138,7 +151,7 @@ describe("Smart Launch", () => {
     fireEvent.click(applyButton);
 
     expect(await screen.findByRole("heading", { name: "Verified launch complete" })).toBeInTheDocument();
-    expect(onApply).toHaveBeenCalledWith("preview-1", true);
+    expect(onApply).toHaveBeenCalledWith("preview-1", true, profile.id);
     expect(onRefresh).toHaveBeenCalledOnce();
     expect(onVerify).toHaveBeenCalledTimes(2);
     expect(onLaunch).toHaveBeenCalledWith(profile.id);

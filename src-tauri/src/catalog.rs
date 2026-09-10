@@ -88,14 +88,7 @@ pub fn refresh(app: &AppHandle) -> Result<RefreshSummary, String> {
         let catalog = parse(&bytes)?;
         let cache_changed = remote::write_atomic(&cache_path(app)?, &bytes)?;
         #[cfg(not(feature = "developer"))]
-        let merged = {
-            let mut config = storage::load_or_create(app)?;
-            let merged = merge(&mut config, &catalog);
-            if merged > 0 {
-                storage::save(app, &config)?;
-            }
-            merged
-        };
+        let merged = { storage::update(app, |config| Ok(merge(config, &catalog)))? };
         #[cfg(feature = "developer")]
         let merged = {
             drop(catalog);

@@ -97,6 +97,38 @@ where
     F: FnOnce() -> Result<T, String>,
     D: FnOnce(&T) -> (bool, String),
 {
+    let _work = crate::operations::WorkGuard::begin()?;
+    track_inner(app, title, kind, start_message, operation, describe)
+}
+
+pub fn track_shutdown<T, F, D>(
+    app: &AppHandle,
+    _shutdown: &crate::operations::ShutdownGuard,
+    title: impl Into<String>,
+    kind: ActivityKind,
+    start_message: impl Into<String>,
+    operation: F,
+    describe: D,
+) -> Result<T, String>
+where
+    F: FnOnce() -> Result<T, String>,
+    D: FnOnce(&T) -> (bool, String),
+{
+    track_inner(app, title, kind, start_message, operation, describe)
+}
+
+fn track_inner<T, F, D>(
+    app: &AppHandle,
+    title: impl Into<String>,
+    kind: ActivityKind,
+    start_message: impl Into<String>,
+    operation: F,
+    describe: D,
+) -> Result<T, String>
+where
+    F: FnOnce() -> Result<T, String>,
+    D: FnOnce(&T) -> (bool, String),
+{
     let title = bounded(title.into(), 200);
     let start_message = bounded(start_message.into(), 4_000);
     let token = start(app, title, kind, start_message).map_err(|error| {

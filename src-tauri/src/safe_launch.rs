@@ -101,6 +101,7 @@ pub fn start(
     profile_id: &str,
     confirmed: bool,
 ) -> Result<SafeLaunchOutcome, String> {
+    let operation = crate::operations::MaintenanceGuard::acquire()?;
     require_confirmation(confirmed, "Starting Safe Launch")?;
     let config = storage::load_or_create(app)?;
     let profile = config
@@ -122,11 +123,12 @@ pub fn start(
             profile.display_name, health.headline
         ));
     }
-    start_at(
+    start_at_guarded(
         profile,
         &loaded.manifest,
         &storage::data_dir(app)?,
         confirmed,
+        Some(operation),
     )
 }
 
@@ -135,6 +137,7 @@ pub fn recover(
     profile_id: &str,
     confirmed: bool,
 ) -> Result<SafeLaunchRecovery, String> {
+    let _operation = crate::operations::MaintenanceGuard::acquire()?;
     require_confirmation(confirmed, "Safe Launch recovery")?;
     let config = storage::load_or_create(app)?;
     let profile = config
@@ -151,11 +154,22 @@ pub fn recover(
     )
 }
 
+#[cfg(test)]
 fn start_at(
     profile: &GameProfile,
     manifest: &Manifest,
     data_dir: &Path,
     confirmed: bool,
+) -> Result<SafeLaunchOutcome, String> {
+    start_at_guarded(profile, manifest, data_dir, confirmed, None)
+}
+
+fn start_at_guarded(
+    profile: &GameProfile,
+    manifest: &Manifest,
+    data_dir: &Path,
+    confirmed: bool,
+    operation: Option<crate::operations::MaintenanceGuard>,
 ) -> Result<SafeLaunchOutcome, String> {
     require_confirmation(confirmed, "Starting Safe Launch")?;
     validate_component(&profile.id, "Profile id")?;
@@ -248,6 +262,7 @@ fn start_at(
     let watcher_session = session_id.clone();
     let watcher_install = install_dir;
     thread::spawn(move || {
+        let _operation = operation; // Protect optional files until automatic restoration finishes.
         watch_child(
             &mut child,
             &watcher_data,

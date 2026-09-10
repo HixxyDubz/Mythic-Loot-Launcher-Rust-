@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useOperationScope } from "../useOperationScope";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -41,12 +42,17 @@ interface SmartLaunchPanelProps {
   onNotice: (message: string) => void;
   onVerify: (profileId: string) => Promise<FileVerification>;
   onPrepare: (request: TransactionRequest) => Promise<TransactionPreview>;
-  onApply: (previewId: string, confirmed: boolean) => Promise<TransactionOutcome>;
+  onApply: (previewId: string, confirmed: boolean, profileId: string) => Promise<TransactionOutcome>;
+  onBusyChange?: (busy: boolean) => void;
   onRefresh: () => Promise<void>;
   onLaunch: (profileId: string) => Promise<LaunchOutcome>;
 }
 
-export function SmartLaunchPanel({
+export function SmartLaunchPanel(props: SmartLaunchPanelProps) {
+  return <SmartLaunchSession key={`${props.profile.id}|${props.profile.installDir}`} {...props} />;
+}
+
+function SmartLaunchSession({
   profile,
   health,
   manifest,
@@ -57,7 +63,9 @@ export function SmartLaunchPanel({
   onApply,
   onRefresh,
   onLaunch,
+  onBusyChange,
 }: SmartLaunchPanelProps) {
+  const scope = useOperationScope();
   const [phase, setPhase] = useState<SmartLaunchPhase>("idle");
   const [verification, setVerification] = useState<FileVerification | null>(null);
   const [preview, setPreview] = useState<TransactionPreview | null>(null);
@@ -72,8 +80,14 @@ export function SmartLaunchPanel({
     manifest.requiredFileCount > 0,
   );
   const busy = ["checking", "staging", "applying", "rechecking"].includes(phase);
+  useEffect(() => {
+    onBusyChange?.(busy);
+    return () => onBusyChange?.(false);
+  }, [busy, onBusyChange]);
 
   async function checkAndStage() {
+    if (busy) return;
+    const current = scope();
     setPreview(null);
     setOutcome(null);
     setConfirmed(false);
@@ -87,6 +101,7 @@ export function SmartLaunchPanel({
     try {
       setPhase("checking");
       const checked = await onVerify(profile.id);
+      if (!current()) return;
       setVerification(checked);
 
       if (checked.unsafeEntries.length > 0) {
@@ -102,6 +117,8 @@ export function SmartLaunchPanel({
 
       setPhase("staging");
       const candidate = await onPrepare({ profileId: profile.id, kind: decision });
+      if (!current()) return;
+      if (candidate.profileId !== profile.id) throw new Error("The prepared candidate belongs to a different modpack. Check again.");
       setPreview(candidate);
       setMessage(candidate.message);
       onNotice(candidate.message);
@@ -118,16 +135,18 @@ export function SmartLaunchPanel({
 
       block(candidate.issues[0] || candidate.message || "The maintenance candidate could not be verified.");
     } catch (error) {
-      fail(errorMessage(error));
+      if (current()) fail(errorMessage(error));
     }
   }
 
   async function applyAndLaunch() {
-    if (!preview || !confirmed) return;
+    if (!preview || !confirmed || busy || preview.profileId !== profile.id) return;
+    const current = scope();
 
     try {
       setPhase("applying");
-      const applied = await onApply(preview.previewId, true);
+      const applied = await onApply(preview.previewId, true, profile.id);
+      if (!current()) return;
       setOutcome(applied);
       setConfirmed(false);
       onNotice(applied.message);
@@ -141,15 +160,18 @@ export function SmartLaunchPanel({
       }
 
       await onRefresh();
+      if (!current()) return;
       await recheckAndLaunch();
     } catch (error) {
-      fail(errorMessage(error));
+      if (current()) fail(errorMessage(error));
     }
   }
 
   async function recheckAndLaunch() {
+    const current = scope();
     setPhase("rechecking");
     const checked = await onVerify(profile.id);
+    if (!current()) return;
     setVerification(checked);
     const failures = verificationFailures(checked);
 
@@ -162,6 +184,7 @@ export function SmartLaunchPanel({
   }
 
   async function openVerifiedGame(checked: FileVerification) {
+    const current = scope();
     const failures = verificationFailures(checked);
     if (failures > 0) {
       block(`Verification found ${failures} file${failures === 1 ? "" : "s"} needing attention. The game was not opened.`);
@@ -169,6 +192,7 @@ export function SmartLaunchPanel({
     }
 
     const launched = await onLaunch(profile.id);
+    if (!current()) return;
     setPhase("launched");
     setMessage(launched.message);
     onNotice(launched.message);
@@ -248,6 +272,8 @@ export function SmartLaunchPanel({
               <div><h2>{preview.ready ? `${titleKind(preview.kind)} candidate verified` : "No live changes are required"}</h2><p>{preview.message}</p></div>
             </div>
             <dl className="pack-facts preview-facts">
+              <div><dt>Modpack</dt><dd>{profile.displayName}</dd></div>
+              <div><dt>Installation folder</dt><dd>{profile.installDir}</dd></div>
               <div><dt>Action</dt><dd>{titleKind(preview.kind)}</dd></div>
               <div><dt>Target version</dt><dd>{preview.version}</dd></div>
               <div><dt>Staged payload</dt><dd>{preview.stagedFiles.toLocaleString()} files · {formatBytes(preview.stagedBytes)}</dd></div>

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import "./App.css";
 import { EditionModpackManagerPanel, EditionPublisherPanel, launcherEdition, publisherAvailable } from "@launcher-edition";
 import { applyModpackTransaction, bootstrap, checkAppUpdate, detectInstallations, getAppUpdateResult, launchProfile, prepareMinecraftBootstrap, prepareModpackTransaction, refreshPublicCatalog, saveProfile, selectProfile, verifyProfileFiles } from "./api";
@@ -19,10 +21,17 @@ function App() {
   const [payload, setPayload] = useState<BootstrapPayload | null>(null);
   const [page, setPage] = useState<"dashboard" | "activity" | "storage" | "support" | "appUpdate" | "settings" | "modpacks" | "publisher" | "update" | "safeLaunch" | "smartLaunch">("dashboard");
   const [busy, setBusy] = useState(false);
+  const [maintenanceBusy, setMaintenanceBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [fatalError, setFatalError] = useState("");
   const [candidates, setCandidates] = useState<DetectedInstall[]>([]);
   const [verifications, setVerifications] = useState<Record<string, FileVerification>>({});
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    const subscription = listen<string>("launcher-close-blocked", (event) => setNotice(event.payload));
+    return () => { void subscription.then((unlisten) => unlisten()); };
+  }, []);
 
   useEffect(() => {
     void bootstrap()
@@ -64,11 +73,12 @@ function App() {
   );
 
   async function chooseProfile(profileId: string) {
-    if (!payload || profileId === payload.config.selectedProfileId) return;
+    if (!payload || busy || maintenanceBusy || profileId === payload.config.selectedProfileId) return;
+    setBusy(true);
     setCandidates([]);
     await selectProfile(profileId).then(setPayload).catch((error) => {
       setNotice(errorMessage(error));
-    });
+    }).finally(() => setBusy(false));
   }
 
   async function save(profile: GameProfile) {
@@ -123,15 +133,15 @@ function App() {
       setVerifications((current) => ({ ...current, [result.profileId]: result }));
       const failures = result.missing.length + result.changed.length + result.unsafeEntries.length;
       if (failures) {
-        setPayload({
-          ...payload,
-          health: payload.health.map((health) => health.profileId === result.profileId ? {
+        setPayload((current) => current && ({
+          ...current,
+          health: current.health.map((health) => health.profileId === result.profileId ? {
             ...health,
             status: "repairNeeded",
             headline: "Installed files need repair",
             details: [`${result.current} of ${result.checked} required files are current`, `${failures} files need attention`],
           } : health),
-        });
+        }));
         setNotice(`Verification found ${failures} file${failures === 1 ? "" : "s"} needing attention.`);
       } else {
         setNotice(`All ${result.checked} required files match the trusted manifest.`);
@@ -175,6 +185,7 @@ function App() {
             selectedId={payload.config.selectedProfileId}
             edition={launcherEdition}
             publisherAvailable={publisherAvailable}
+            disabled={busy || maintenanceBusy}
             onSelect={(id) => void chooseProfile(id)}
             onSettings={() => setPage("settings")}
             onActivity={() => setPage("activity")}
@@ -212,6 +223,7 @@ function App() {
               />
             ) : page === "update" ? (
               <UpdatePanel
+                onBusyChange={setMaintenanceBusy}
                 profile={selectedProfile}
                 health={selectedHealth}
                 manifest={selectedManifest}
@@ -221,6 +233,7 @@ function App() {
               />
             ) : page === "safeLaunch" ? (
               <SafeLaunchPanel
+                key={`${selectedProfile.id}|${selectedProfile.installDir}`}
                 profile={selectedProfile}
                 health={selectedHealth}
                 manifest={selectedManifest}
@@ -229,6 +242,7 @@ function App() {
               />
             ) : page === "smartLaunch" ? (
               <SmartLaunchPanel
+                onBusyChange={setMaintenanceBusy}
                 profile={selectedProfile}
                 health={selectedHealth}
                 manifest={selectedManifest}

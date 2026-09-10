@@ -4,7 +4,7 @@ use std::{
     io::{self, BufReader, BufWriter, Write},
     path::{Path, PathBuf},
     sync::{Mutex, OnceLock},
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use fs2::available_space;
@@ -22,8 +22,6 @@ use crate::{
 };
 
 const FREE_SPACE_BUFFER: u64 = 64 * 1024 * 1024;
-const DOWNLOAD_ATTEMPTS: usize = 3;
-const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -102,6 +100,7 @@ pub fn prepare(
     app: &AppHandle,
     request: &TransactionRequest,
 ) -> Result<TransactionPreview, String> {
+    let _operation = crate::operations::MaintenanceGuard::acquire()?;
     let config = storage::load_or_create(app)?;
     let profile = config
         .profiles
@@ -121,28 +120,54 @@ pub fn prepare(
 
 pub fn apply(
     app: &AppHandle,
+    profile_id: &str,
     preview_id: &str,
     confirmed: bool,
 ) -> Result<TransactionOutcome, String> {
     require_confirmation(confirmed)?;
+    let _operation = crate::operations::MaintenanceGuard::acquire()?;
     let plan = transaction_plans()
         .lock()
         .map_err(|_| "Update preview cache is unavailable".to_string())?
         .remove(preview_id)
         .ok_or_else(|| "Prepare a fresh update or repair preview before applying".to_string())?;
 
-    let mut config = storage::load_or_create(app)?;
+    let config = storage::load_or_create(app)?;
+    require_profile_match(profile_id, &plan.profile_id, &config.selected_profile_id)?;
     let profile = config
         .profiles
-        .iter_mut()
+        .iter()
         .find(|profile| profile.id == plan.profile_id)
         .ok_or_else(|| "The previewed modpack profile no longer exists".to_string())?;
     let expected_install = PathBuf::from(profile.install_dir.trim());
     if expected_install != plan.install_dir {
         return Err("The modpack folder changed after preview; prepare again".into());
     }
-    profile.local_modpack_version = plan.version.clone();
-    execute_plan(&plan, None, || storage::save(app, &config))
+    execute_plan(&plan, None, || {
+        storage::update(app, |config| {
+            let profile = config
+                .profiles
+                .iter_mut()
+                .find(|p| p.id == plan.profile_id)
+                .ok_or("The updated modpack profile no longer exists")?;
+            if Path::new(&profile.install_dir) != plan.install_dir {
+                return Err("The modpack folder changed during update".into());
+            }
+            profile.local_modpack_version = plan.version.clone();
+            Ok(())
+        })
+    })
+}
+
+pub(crate) fn require_profile_match(
+    requested: &str,
+    reviewed: &str,
+    selected: &str,
+) -> Result<(), String> {
+    if requested != reviewed || selected != reviewed {
+        return Err("The selected modpack changed after review. Select the intended pack and prepare a fresh review.".into());
+    }
+    Ok(())
 }
 
 fn require_confirmation(confirmed: bool) -> Result<(), String> {
@@ -443,51 +468,7 @@ fn fetch_source(
 }
 
 fn download_https(url: &str, destination: &Path) -> Result<(), String> {
-    let partial = partial_path(destination);
-    let mut last_error = String::new();
-    for _attempt in 1..=DOWNLOAD_ATTEMPTS {
-        fs::remove_file(&partial).ok();
-        let result = (|| {
-            let config = ureq::Agent::config_builder()
-                .timeout_global(Some(DOWNLOAD_TIMEOUT))
-                .build();
-            let agent: ureq::Agent = config.into();
-            let mut response = agent
-                .get(url)
-                .call()
-                .map_err(|error| format!("HTTPS request failed: {error}"))?;
-            let content_length = response
-                .headers()
-                .get("content-length")
-                .and_then(|value| value.to_str().ok())
-                .and_then(|value| value.parse::<u64>().ok());
-            if let Some(size) = content_length {
-                ensure_space(destination.parent().unwrap_or(Path::new(".")), size)?;
-            }
-            let mut output = BufWriter::new(
-                File::create(&partial)
-                    .map_err(|error| format!("Could not create partial download: {error}"))?,
-            );
-            io::copy(&mut response.body_mut().as_reader(), &mut output)
-                .map_err(|error| format!("Download was interrupted: {error}"))?;
-            output
-                .flush()
-                .map_err(|error| format!("Could not flush downloaded package: {error}"))?;
-            fs::rename(&partial, destination)
-                .map_err(|error| format!("Could not activate downloaded package: {error}"))?;
-            Ok::<(), String>(())
-        })();
-        match result {
-            Ok(()) => return Ok(()),
-            Err(error) => {
-                last_error = error;
-                fs::remove_file(&partial).ok();
-            }
-        }
-    }
-    Err(format!(
-        "Download failed after {DOWNLOAD_ATTEMPTS} attempts: {last_error}"
-    ))
+    crate::download::https(url, destination)
 }
 
 fn extract_validated_package(
@@ -1098,6 +1079,74 @@ fn title_kind(kind: TransactionKind) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "downloads the real Minecraft package twice into disposable storage; requires several GiB free"]
+    fn live_minecraft_install_and_single_file_repair_preserve_untracked_saves() {
+        let root = tempfile::Builder::new()
+            .prefix("mythic-live-minecraft-")
+            .tempdir()
+            .unwrap();
+        let install = root.path().join("install");
+        let data = root.path().join("data");
+        let sentinel = install.join("saves/test-preservation/keep.txt");
+        fs::create_dir_all(sentinel.parent().unwrap()).unwrap();
+        fs::write(&sentinel, b"untracked save data").unwrap();
+        let mut profile = crate::models::LauncherConfig::default().profiles.remove(0);
+        profile.install_dir = install.display().to_string();
+        let bytes = crate::remote::fetch_https(&profile.manifest_url, 64 * 1024 * 1024).unwrap();
+        let manifest: Manifest = serde_json::from_slice(&bytes).unwrap();
+        assert!(!manifest.files.is_empty());
+        let started = std::time::Instant::now();
+        let preview =
+            prepare_at(&profile, &manifest, TransactionKind::Update, &data, true).unwrap();
+        let plan = transaction_plans()
+            .lock()
+            .unwrap()
+            .remove(&preview.preview_id)
+            .unwrap();
+        let installed = execute_plan(&plan, None, || Ok(())).unwrap();
+        assert!(
+            installed.success,
+            "{} {}",
+            installed.message, installed.error
+        );
+        assert!(mismatched_required(&manifest, &install).unwrap().is_empty());
+        assert_eq!(fs::read(&sentinel).unwrap(), b"untracked save data");
+        eprintln!(
+            "Real HTTPS package installed: {} verified files in {:.1}s",
+            manifest.files.len(),
+            started.elapsed().as_secs_f64()
+        );
+        let victim = manifest.files.iter().find(|f| f.required).unwrap();
+        fs::write(
+            safe_path::safe_join(&install, &victim.path).unwrap(),
+            b"damaged disposable test copy",
+        )
+        .unwrap();
+        let repair = prepare_at(&profile, &manifest, TransactionKind::Repair, &data, true).unwrap();
+        assert_eq!(repair.staged_files, 1);
+        let plan = transaction_plans()
+            .lock()
+            .unwrap()
+            .remove(&repair.preview_id)
+            .unwrap();
+        let repaired = execute_plan(&plan, None, || Ok(())).unwrap();
+        assert!(repaired.success, "{} {}", repaired.message, repaired.error);
+        assert!(mismatched_required(&manifest, &install).unwrap().is_empty());
+        assert_eq!(fs::read(&sentinel).unwrap(), b"untracked save data");
+        eprintln!(
+            "Real HTTPS single-file repair verified; total {:.1}s",
+            started.elapsed().as_secs_f64()
+        );
+    }
+
+    #[test]
+    fn application_is_bound_to_reviewed_and_current_profile() {
+        assert!(require_profile_match("pack_a", "pack_a", "pack_a").is_ok());
+        assert!(require_profile_match("pack_b", "pack_a", "pack_b").is_err());
+        assert!(require_profile_match("pack_a", "pack_a", "pack_b").is_err());
+    }
     use sha2::{Digest, Sha256};
     use tempfile::TempDir;
 

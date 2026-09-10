@@ -1,8 +1,18 @@
 # Tauri rewrite parity status
 
-Last updated: 2026-09-03
+Last updated: 2026-09-10
 
-The Python launcher remains the behavior reference. This file records the new Rust/Tauri implementation only.
+The Rust launcher is the only maintained application. Python is retired, reference-only, and must not be upgraded.
+
+## Current adversarial-review checkpoint
+
+The 0.1.8 fixes and verification are recorded in [BLOCKER_FIXES_0.1.8.md](BLOCKER_FIXES_0.1.8.md). That checkpoint supersedes the historical claims below where they conflict. In particular, the prior live self-update test renamed the downloaded binary to the spaced installed name; it did not prove the hyphenated GitHub filename worked. A real Minecraft package installation and single-file repair did pass in disposable storage during the September 8 audit, but that was not a CurseForge/Modrinth import or real game test. Complete parity and public-launch readiness have **not** been established.
+
+The five high-priority fixes cover update-helper readiness/names, large downloads, cross-process maintenance/configuration exclusion, profile-bound approvals and interrupted-settings recovery. Remaining review findings include catalogue archival reconciliation, remote artwork CSP, arbitrary Minecraft loader metadata, optional-file publishing, and separation of unpublished content drafts from refreshed manifests. Other parity/acceptance gaps include Java/memory controls, full game adapters/version checks, optional-extras management, automatic crash prompts, presence/customization settings, cancellation/progress, and replay after a hard interruption during live file replacement. Servers remain deliberately out of scope.
+
+## Historical September 3 feature inventory
+
+The following table and snapshot describe the earlier implementation checkpoint, not a fresh feature-complete certification.
 
 | Area | Status | Evidence / next gate |
 |---|---|---|

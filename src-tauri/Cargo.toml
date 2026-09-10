@@ -1,6 +1,6 @@
 [package]
 name = "mythic-loot-launcher"
-version = "0.1.7"
+version = "0.1.8"
 description = "A Rust-powered modpack launcher and GitHub publishing companion"
 authors = ["HixxyDubz"]
 edition = "2024"
@@ -33,7 +33,8 @@ walkdir = "2.5"
 time = { version = "0.3", features = ["formatting", "parsing"] }
 zip = { version = "8.6", default-features = false, features = ["deflate"] }
 fs2 = "0.4"
-ureq = "3.4"
+# download.rs timeout-phase interaction is verified against this version.
+ureq = "=3.4.0"
 semver = "1"
 base64 = { version = "0.22", optional = true }
 

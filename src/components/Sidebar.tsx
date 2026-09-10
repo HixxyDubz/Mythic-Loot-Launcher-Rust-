@@ -7,6 +7,7 @@ interface SidebarProps {
   selectedId: string;
   edition: "player" | "developer";
   publisherAvailable: boolean;
+  disabled?: boolean;
   onSelect: (id: string) => void;
   onSettings: () => void;
   onActivity: () => void;
@@ -17,7 +18,7 @@ interface SidebarProps {
   onAddModpack: () => void;
 }
 
-export function Sidebar({ profiles, health, selectedId, edition, publisherAvailable, onSelect, onSettings, onActivity, onStorage, onSupport, onAppUpdate, onPublisher, onAddModpack }: SidebarProps) {
+export function Sidebar({ profiles, health, selectedId, edition, publisherAvailable, disabled, onSelect, onSettings, onActivity, onStorage, onSupport, onAppUpdate, onPublisher, onAddModpack }: SidebarProps) {
   return (
     <aside className="sidebar">
       <div className="brand-lockup">
@@ -36,6 +37,7 @@ export function Sidebar({ profiles, health, selectedId, edition, publisherAvaila
             <button
               className={`profile-button ${selected ? "selected" : ""}`}
               key={profile.id}
+              disabled={disabled}
               onClick={() => onSelect(profile.id)}
             >
               <span className="profile-art">
@@ -54,29 +56,29 @@ export function Sidebar({ profiles, health, selectedId, edition, publisherAvaila
         })}
       </nav>
       {publisherAvailable && (
-        <button className="add-modpack" onClick={onAddModpack}>
+        <button className="add-modpack" onClick={onAddModpack} disabled={disabled}>
           <Plus size={16} /> Add modpack
         </button>
       )}
       <div className="sidebar-footer">
-        <button onClick={onActivity}>
+        <button onClick={onActivity} disabled={disabled}>
           <Activity size={17} /> Activity
         </button>
-        <button onClick={onStorage}>
+        <button onClick={onStorage} disabled={disabled}>
           <HardDrive size={17} /> Storage
         </button>
-        <button onClick={onSupport}>
+        <button onClick={onSupport} disabled={disabled}>
           <LifeBuoy size={17} /> Support
         </button>
-        <button onClick={onAppUpdate}>
+        <button onClick={onAppUpdate} disabled={disabled}>
           <RefreshCw size={17} /> App update
         </button>
         {publisherAvailable && (
-          <button onClick={onPublisher}>
+          <button onClick={onPublisher} disabled={disabled}>
             <CloudUpload size={17} /> Publisher
           </button>
         )}
-        <button onClick={onSettings}>
+        <button onClick={onSettings} disabled={disabled}>
           <Settings size={17} /> Settings
         </button>
         <span><Gamepad2 size={15} /> {edition === "developer" ? "Developer edition" : "Player edition"}</span>

@@ -1,4 +1,9 @@
-param()
+param(
+    [ValidateSet("Mythic-Loot-Launcher-Player.exe", "Mythic Loot Launcher Player.exe", "mythic-loot-launcher.exe")]
+    [string]$TargetFileName = "Mythic-Loot-Launcher-Player.exe",
+    [switch]$RejectCorruptStage,
+    [switch]$ReadinessOnly
+)
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
@@ -11,7 +16,7 @@ $smokeRoot = Join-Path $artifactRoot ("app-update-smoke-" + [guid]::NewGuid().To
 $dataRoot = Join-Path $smokeRoot "data"
 $stageRoot = Join-Path $dataRoot "app-update-staging\fixture"
 $installRoot = Join-Path $smokeRoot "install"
-$target = Join-Path $installRoot "Mythic Loot Launcher Player.exe"
+$target = Join-Path $installRoot $TargetFileName
 $staged = Join-Path $stageRoot "player.next.exe"
 $helper = Join-Path $stageRoot "mythic-restart-agent.exe"
 $backup = Join-Path $stageRoot "player.previous.exe"
@@ -75,8 +80,10 @@ foreach ($stale in @(Get-ChildItem -LiteralPath $artifactRoot -Directory -Filter
         -not $resolvedStale.StartsWith($artifactRoot + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) {
         throw "Refusing to clean an unexpected app-update smoke folder: $resolvedStale"
     }
-    $staleTarget = Join-Path $resolvedStale "install\Mythic Loot Launcher Player.exe"
-    Stop-And-WaitForProcessIds -ProcessIds @(Get-ProcessIdsForExecutable -ExpectedPath $staleTarget)
+    foreach ($name in @("Mythic Loot Launcher Player.exe", "Mythic-Loot-Launcher-Player.exe", "mythic-loot-launcher.exe")) {
+        $staleTarget = Join-Path (Join-Path $resolvedStale "install") $name
+        Stop-And-WaitForProcessIds -ProcessIds @(Get-ProcessIdsForExecutable -ExpectedPath $staleTarget)
+    }
     Remove-Item -LiteralPath $resolvedStale -Recurse -Force
 }
 
@@ -120,6 +127,9 @@ try {
     }
     $journalJson = $journal | ConvertTo-Json
     [System.IO.File]::WriteAllText($journalPath, $journalJson, [System.Text.UTF8Encoding]::new($false))
+    if ($RejectCorruptStage) {
+        [System.IO.File]::AppendAllText($staged, "corrupted after review")
+    }
 
     $env:MYTHIC_LOOT_DATA_DIR = $dataRoot
     # Match Rust's std::process::Command/CreateProcess path exactly. ShellExecute can
@@ -128,11 +138,38 @@ try {
     $startInfo.FileName = $helper
     $startInfo.UseShellExecute = $false
     $startInfo.CreateNoWindow = $true
-    $startInfo.Arguments = "--mythic-loot-apply-update `"$journalPath`" 0"
+    $parentIdentifier = if ($ReadinessOnly) { $PID } else { 0 }
+    $startInfo.Arguments = "--mythic-loot-apply-update `"$journalPath`" $parentIdentifier"
     $helperProcess = [System.Diagnostics.Process]::Start($startInfo)
+    $readyPath = Join-Path $stageRoot "helper-ready.json"
+    if ($ReadinessOnly -and -not $RejectCorruptStage) {
+        $readyDeadline = [DateTime]::UtcNow.AddSeconds(15)
+        while (-not (Test-Path -LiteralPath $readyPath) -and [DateTime]::UtcNow -lt $readyDeadline) {
+            if ($helperProcess.HasExited) { throw "Helper exited before readiness" }
+            Start-Sleep -Milliseconds 100
+        }
+        $ready = Get-Content -Raw -LiteralPath $readyPath | ConvertFrom-Json
+        if ($ready.parentPid -ne $PID -or $ready.journalSha256 -ne (Get-Sha256Hex -Path $journalPath)) {
+            throw "Helper readiness was not bound to the parent and exact reviewed journal"
+        }
+        if ((Get-Sha256Hex -Path $target) -ne $originalHash -or (Test-Path -LiteralPath $backup)) {
+            throw "Helper changed the target while its parent was still alive"
+        }
+        Stop-Process -Id $helperProcess.Id -Force
+        $helperProcess.WaitForExit()
+        Write-Host "Packaged helper confirmed readiness and kept $TargetFileName unchanged while the parent remained alive."
+        return
+    }
     if (-not $helperProcess.WaitForExit(15000)) {
         Stop-Process -Id $helperProcess.Id -Force -ErrorAction SilentlyContinue
         throw "Packaged update helper did not exit within 15 seconds"
+    }
+    if ($RejectCorruptStage) {
+        if ($helperProcess.ExitCode -eq 0 -or (Test-Path -LiteralPath $readyPath) -or (Test-Path -LiteralPath $backup) -or (Get-Sha256Hex -Path $target) -ne $originalHash) {
+            throw "Corrupt stage did not fail closed before readiness and target replacement"
+        }
+        Write-Host "Packaged helper rejected corrupt staged bytes before readiness; $TargetFileName stayed unchanged."
+        return
     }
     if ($helperProcess.ExitCode -ne 0) {
         throw "Packaged update helper exited with code $($helperProcess.ExitCode)"
@@ -169,9 +206,13 @@ try {
         Start-Sleep -Milliseconds 100
     }
 
-    Write-Host "Packaged Player update helper replaced different bytes, preserved the exact backup, verified the activated SHA-256, recorded success and restarted Player."
+    Write-Host "Packaged helper replaced $TargetFileName with different bytes, preserved the exact backup, verified the activated SHA-256, recorded success and restarted Player."
 }
 finally {
+    if ((Get-Variable helperProcess -ErrorAction SilentlyContinue) -and $helperProcess -and -not $helperProcess.HasExited) {
+        Stop-Process -Id $helperProcess.Id -Force -ErrorAction SilentlyContinue
+        $helperProcess.WaitForExit()
+    }
     $remainingProcesses = @(Get-ProcessIdsForExecutable -ExpectedPath $target)
     Stop-And-WaitForProcessIds -ProcessIds @($launchedProcesses + $remainingProcesses | Select-Object -Unique)
     Remove-Item Env:MYTHIC_LOOT_DATA_DIR -ErrorAction SilentlyContinue

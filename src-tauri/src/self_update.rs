@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     env,
     ffi::OsStr,
-    fs::{self, File, Metadata},
+    fs::{self, File, Metadata, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
     process::Command,
@@ -166,6 +166,9 @@ fn feed_check_url(nonce: u128) -> String {
 }
 
 pub fn prepare(app: &AppHandle, preview_id: &str) -> Result<AppUpdateStage, String> {
+    let target_exe = trusted_current_exe()?;
+    validate_target_name(&target_exe)?;
+    check_target_writable(&target_exe)?;
     let plan = feed_plans()
         .lock()
         .map_err(|_| "App update preview cache is unavailable".to_string())?
@@ -202,7 +205,6 @@ pub fn prepare(app: &AppHandle, preview_id: &str) -> Result<AppUpdateStage, Stri
     fs::rename(&partial, &staged_exe)
         .map_err(|error| format!("Could not activate verified Player update staging: {error}"))?;
 
-    let target_exe = trusted_current_exe()?;
     let target_sha256 = manifest::sha256(&target_exe)?;
     let result_path = data_dir.join(UPDATE_RESULT_FILE);
     let staged = StagedPlan {
@@ -270,13 +272,24 @@ pub fn apply(stage_id: &str, confirmed: bool) -> Result<AppUpdateApplyOutcome, S
             restart_probe: false,
         };
         let journal_path = plan.stage_dir.join("apply-update.json");
+        validate_helper_journal(&journal)?;
+        check_target_writable(&plan.target_exe)?;
         write_json_atomic(&journal_path, &journal)?;
-        Command::new(&helper)
+        // Do not close Player merely because CreateProcess succeeded: the child
+        // must validate the journal and both executables, then acknowledge readiness.
+        let ready_path = plan.stage_dir.join("helper-ready.json");
+        remove_regular_if_exists(&ready_path)?;
+        let mut child = Command::new(&helper)
             .arg("--mythic-loot-apply-update")
             .arg(&journal_path)
             .arg(std::process::id().to_string())
             .spawn()
             .map_err(|error| format!("Could not start the isolated app update helper: {error}"))?;
+        if let Err(error) = await_helper_ready(&mut child, &journal_path, &ready_path) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(error);
+        }
         staged_plans()
             .lock()
             .map_err(|_| "Staged app update cache is unavailable".to_string())?
@@ -330,6 +343,26 @@ pub fn try_run_helper() -> Option<i32> {
 
 fn run_helper(journal_path: &Path, parent_pid: u32) -> Result<(), String> {
     let journal = load_helper_journal(journal_path)?;
+    verify_file(
+        Path::new(&journal.target_exe),
+        0,
+        &journal.target_sha256,
+        "current Player",
+    )?;
+    verify_file(
+        Path::new(&journal.staged_exe),
+        journal.staged_bytes,
+        &journal.staged_sha256,
+        "staged Player",
+    )?;
+    check_target_writable(Path::new(&journal.target_exe))?;
+    write_json_atomic(
+        &journal_path.with_file_name("helper-ready.json"),
+        &HelperReady {
+            parent_pid,
+            journal_sha256: manifest::sha256(journal_path)?,
+        },
+    )?;
     wait_for_process_exit(parent_pid)?;
     let result = apply_replacement(&journal, false);
     let target = PathBuf::from(&journal.target_exe);
@@ -353,8 +386,14 @@ fn run_helper(journal_path: &Path, parent_pid: u32) -> Result<(), String> {
                 journal.version
             ),
             (Err(error), _) => format!(
-                "Player update {} failed and the previous launcher was restored: {error}",
-                journal.version
+                "Player update {} failed. {} Details: {error}",
+                journal.version,
+                if manifest::sha256(&target).ok().as_deref() == Some(journal.target_sha256.as_str())
+                {
+                    "The previous launcher is present and verified."
+                } else {
+                    "Automatic recovery could not be verified; restore the retained backup before using Player."
+                }
             ),
         },
         recorded_at: unix_millis(SystemTime::now()),
@@ -685,17 +724,76 @@ fn validate_helper_journal(journal: &HelperJournal) -> Result<(), String> {
             return Err("App update journal contains a non-absolute path".into());
         }
     }
-    let target_name = Path::new(&journal.target_exe)
+    validate_target_name(Path::new(&journal.target_exe))
+}
+
+fn validate_target_name(path: &Path) -> Result<(), String> {
+    let target_name = path
         .file_name()
         .and_then(|value| value.to_str())
         .unwrap_or_default();
-    if !matches!(
-        target_name,
-        "Mythic Loot Launcher Player.exe" | "mythic-loot-launcher.exe"
-    ) {
-        return Err("App update target is not a Mythic Loot Player executable".into());
+    if ![
+        APP_UPDATE_ASSET_NAME,
+        "Mythic Loot Launcher Player.exe",
+        "mythic-loot-launcher.exe",
+    ]
+    .iter()
+    .any(|allowed| target_name.eq_ignore_ascii_case(allowed))
+    {
+        return Err("This Player executable has an unsupported filename. Rename it to Mythic-Loot-Launcher-Player.exe before updating; the launcher has not been changed.".into());
     }
     Ok(())
+}
+
+fn check_target_writable(target: &Path) -> Result<(), String> {
+    let parent = target
+        .parent()
+        .ok_or("Player executable has no parent folder")?;
+    crate::safe_path::reject_link_path(parent)?;
+    let probe = parent.join(format!(".mythic-write-check-{}", unix_nanos()));
+    let file = OpenOptions::new().write(true).create_new(true).open(&probe)
+        .map_err(|e| format!("The Player installation folder is not writable. Move the portable app to a user-owned folder or use the per-user installer before updating: {e}"))?;
+    drop(file);
+    fs::remove_file(probe).map_err(|e| format!("Could not remove installation write check: {e}"))
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct HelperReady {
+    parent_pid: u32,
+    journal_sha256: String,
+}
+
+#[cfg(any(test, not(debug_assertions)))]
+fn await_helper_ready(
+    child: &mut std::process::Child,
+    journal: &Path,
+    ready: &Path,
+) -> Result<(), String> {
+    let digest = manifest::sha256(journal)?;
+    let deadline = std::time::Instant::now() + Duration::from_secs(20);
+    loop {
+        if let Some(status) = child
+            .try_wait()
+            .map_err(|e| format!("Could not check update helper: {e}"))?
+        {
+            return Err(format!(
+                "The update helper stopped before readiness ({status}). Player remains open; no update was applied."
+            ));
+        }
+        if let Ok(bytes) = fs::read(ready)
+            && bytes.len() < 4096
+            && let Ok(ack) = serde_json::from_slice::<HelperReady>(&bytes)
+            && ack.parent_pid == std::process::id()
+            && ack.journal_sha256 == digest
+        {
+            return Ok(());
+        }
+        if std::time::Instant::now() >= deadline {
+            return Err("The update helper did not confirm readiness. Player remains open; retry the app update.".into());
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
 }
 
 fn trusted_current_exe() -> Result<PathBuf, String> {
@@ -954,6 +1052,42 @@ fn unix_millis(value: SystemTime) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parent_reports_early_helper_exit_without_committing_shutdown() {
+        let root = tempfile::tempdir().unwrap();
+        let journal = root.path().join("apply-update.json");
+        fs::write(&journal, b"test journal").unwrap();
+        let mut child = Command::new(std::env::current_exe().unwrap())
+            .arg("--list")
+            .stdout(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        let error =
+            await_helper_ready(&mut child, &journal, &root.path().join("helper-ready.json"))
+                .unwrap_err();
+        child.wait().unwrap();
+        assert!(error.contains("Player remains open"));
+    }
+
+    #[test]
+    fn updater_accepts_all_shipped_player_executable_names_only() {
+        for name in [
+            APP_UPDATE_ASSET_NAME,
+            "Mythic Loot Launcher Player.exe",
+            "mythic-loot-launcher.exe",
+            "MYTHIC-LOOT-LAUNCHER-PLAYER.EXE",
+        ] {
+            assert!(validate_target_name(Path::new(name)).is_ok(), "{name}");
+        }
+        for name in [
+            "Mythic-Loot-Launcher-Player-Setup.exe",
+            "Mythic Loot Launcher Developer.exe",
+            "renamed.exe",
+        ] {
+            assert!(validate_target_name(Path::new(name)).is_err(), "{name}");
+        }
+    }
 
     fn hash(bytes: &[u8]) -> String {
         format!("{:x}", Sha256::digest(bytes))
