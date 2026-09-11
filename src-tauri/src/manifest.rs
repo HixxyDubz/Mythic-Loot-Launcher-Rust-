@@ -170,7 +170,7 @@ pub fn store_published(
     remote::write_atomic(&destination, bytes)
 }
 
-fn invalid_loaded(profile: &GameProfile, error: String) -> LoadedManifest {
+pub(crate) fn invalid_loaded(profile: &GameProfile, error: String) -> LoadedManifest {
     LoadedManifest {
         manifest: Manifest {
             profile_id: profile.id.clone(),
@@ -218,7 +218,11 @@ fn load_source(app: &AppHandle, profile: &GameProfile) -> Result<(String, String
     Ok((embedded.into(), "bundled launcher manifest".into()))
 }
 
-fn summarize(manifest: &Manifest, source: String, errors: Vec<String>) -> ManifestSummary {
+pub(crate) fn summarize(
+    manifest: &Manifest,
+    source: String,
+    errors: Vec<String>,
+) -> ManifestSummary {
     let update_size = manifest
         .update_parts
         .iter()

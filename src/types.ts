@@ -371,9 +371,16 @@ export interface PackageRequest {
   profileId: string;
   sourceDir: string;
   version: string;
+  gameVersion: string;
+  minecraftModLoader: string;
   releaseDate: string;
   repository: string;
   releaseNotes: string;
+}
+
+export interface PublishingChoices {
+  request: PackageRequest;
+  gameVersions: string[];
 }
 
 export interface PackageAssetPreview {
@@ -387,6 +394,8 @@ export interface PackagePreview {
   previewId: string;
   profileId: string;
   version: string;
+  gameVersion: string;
+  minecraftModLoader: string;
   tag: string;
   repository: string;
   sourceDir: string;
@@ -394,6 +403,7 @@ export interface PackagePreview {
   packagePath: string;
   manifestPath: string;
   fileCount: number;
+  optionalFileCount: number;
   excludedCount: number;
   totalBytes: number;
   packageBytes: number;
@@ -410,6 +420,7 @@ export interface PackagePreview {
 export interface ReleasePublication {
   profileId: string;
   version: string;
+  gameVersion: string;
   repository: string;
   tag: string;
   manifestUrl: string;

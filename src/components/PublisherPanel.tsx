@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Archive,
   ArrowLeft,
@@ -14,6 +14,8 @@ import {
 import {
   createGithubRepository,
   githubPublisherStatus,
+  loadPublishingChoices,
+  savePublishingChoices,
   prepareModpackRelease,
   preparePublicCatalog,
   publishModpackRelease,
@@ -30,7 +32,9 @@ import type {
   RepositoryCreation,
   RepositoryRequest,
   ManifestSummary,
+  PackageRequest,
 } from "../types";
+import { PathField } from "./PathField";
 import { ManifestContentEditor } from "./ManifestContentEditor";
 import { ManifestContentPublisher } from "./ManifestContentPublisher";
 
@@ -51,6 +55,11 @@ export function PublisherPanel({ profile, manifest, onBack, onNotice, onPayload 
   const [repositoryConfirmed, setRepositoryConfirmed] = useState(false);
   const [sourceDir, setSourceDir] = useState(profile.installDir);
   const [version, setVersion] = useState(profile.requiredModpackVersion);
+  const [gameVersion, setGameVersion] = useState(profile.requiredGameVersion);
+  const [gameVersions, setGameVersions] = useState<string[]>([profile.requiredGameVersion].filter(Boolean));
+  const [minecraftModLoader, setMinecraftModLoader] = useState("");
+  const [loadingChoices, setLoadingChoices] = useState(true);
+  const [choicesError, setChoicesError] = useState("");
   const [releaseDate, setReleaseDate] = useState(new Date().toISOString().slice(0, 10));
   const [releaseNotes, setReleaseNotes] = useState(`Release ${profile.requiredModpackVersion}`);
   const [releasePreview, setReleasePreview] = useState<PackagePreview | null>(null);
@@ -62,6 +71,34 @@ export function PublisherPanel({ profile, manifest, onBack, onNotice, onPayload 
   const [catalogConfirmed, setCatalogConfirmed] = useState(false);
   const [catalogPublication, setCatalogPublication] = useState<CatalogPublication | null>(null);
   const [contentRevision, setContentRevision] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    loadPublishingChoices(profile.id).then((choices) => {
+      if (!active) return;
+      const saved = choices.request;
+      setRepository(saved.repository); setSourceDir(saved.sourceDir); setVersion(saved.version);
+      setGameVersion(saved.gameVersion); setGameVersions(choices.gameVersions);
+      setMinecraftModLoader(saved.minecraftModLoader); setReleaseDate(saved.releaseDate); setReleaseNotes(saved.releaseNotes);
+    }).catch((error) => { if (active) setChoicesError(errorMessage(error)); })
+      .finally(() => { if (active) setLoadingChoices(false); });
+    return () => { active = false; };
+  }, [profile.id]);
+
+  const releaseRequest: PackageRequest = {
+    profileId: profile.id, sourceDir, version, gameVersion, minecraftModLoader, releaseDate, repository, releaseNotes,
+  };
+
+  async function saveChoices() {
+    setBusy(true);
+    try {
+      const saved = await savePublishingChoices(releaseRequest);
+      setGameVersions(saved.gameVersions);
+      setChoicesError("");
+      onNotice("Publishing choices saved on this computer. Nothing was uploaded.");
+    } catch (error) { onNotice(errorMessage(error)); }
+    finally { setBusy(false); }
+  }
 
   function invalidateRelease() {
     setReleasePreview(null);
@@ -113,14 +150,7 @@ export function PublisherPanel({ profile, manifest, onBack, onNotice, onPayload 
     setReleaseConfirmed(false);
     setPublication(null);
     try {
-      const result = await prepareModpackRelease({
-        profileId: profile.id,
-        sourceDir,
-        version,
-        releaseDate,
-        repository,
-        releaseNotes,
-      });
+      const result = await prepareModpackRelease(releaseRequest);
       setReleasePreview(result);
       onNotice(
         result.ready
@@ -190,7 +220,8 @@ export function PublisherPanel({ profile, manifest, onBack, onNotice, onPayload 
 
   const canPreviewRepository = Boolean(status?.authenticated && repository.includes("/") && !busy);
   const canPrepareRelease = Boolean(
-    repository.includes("/") && sourceDir.trim() && version.trim() && releaseDate.trim() && !busy,
+    repository.includes("/") && sourceDir.trim() && version.trim() && gameVersion.trim()
+    && (profile.game !== "minecraft" || minecraftModLoader.trim()) && releaseDate.trim() && !busy && !loadingChoices && !choicesError,
   );
 
   return (
@@ -209,7 +240,7 @@ export function PublisherPanel({ profile, manifest, onBack, onNotice, onPayload 
           manifest={manifest}
           onNotice={onNotice}
           onPayload={onPayload}
-          onSaved={() => setContentRevision((current) => current + 1)}
+          onSaved={() => { setContentRevision((current) => current + 1); invalidateRelease(); }}
         />
 
         <ManifestContentPublisher
@@ -227,7 +258,7 @@ export function PublisherPanel({ profile, manifest, onBack, onNotice, onPayload 
           </div>
         </section>
 
-        <section className="settings-section panel-card">
+        <fieldset className="settings-section panel-card publisher-fields" disabled={busy || loadingChoices}>
           <div className="section-title"><CloudUpload /><div><h2>Repository</h2><p>Select an existing owner/name repository, or review and create an empty one.</p></div></div>
           <div className="form-stack">
             <label className="field"><span>Repository (owner/name)</span><input value={repository} placeholder="HixxyDubz/Mythic-Loot-Modpack" onChange={(event) => { setRepository(event.target.value); setRepositoryPreviewed(false); invalidateRelease(); }} /></label>
@@ -237,7 +268,7 @@ export function PublisherPanel({ profile, manifest, onBack, onNotice, onPayload 
             </div>
           </div>
           <button className="secondary-action publisher-preview" onClick={previewRepository} disabled={!canPreviewRepository}><Eye size={17} /> Preview empty repository creation</button>
-        </section>
+        </fieldset>
 
         {repositoryPreviewed && (
           <section className="settings-section panel-card mutation-preview">
@@ -257,26 +288,35 @@ export function PublisherPanel({ profile, manifest, onBack, onNotice, onPayload 
 
         {creation && <section className="settings-section panel-card creation-result"><CheckCircle2 /><div><h2>{creation.repository} created</h2><p>{creation.url || creation.message}</p></div></section>}
 
-        <section className="settings-section panel-card release-builder">
+        <fieldset className="settings-section panel-card release-builder publisher-fields" disabled={busy || loadingChoices}>
           <div className="section-title"><Archive /><div><h2>Local release preparation</h2><p>Scan privacy, inventory and hash files, then generate a deterministic ZIP and trusted manifest. This step does not contact GitHub.</p></div></div>
           <div className="form-grid">
-            <label className="field field-wide"><span>Modpack source folder</span><input value={sourceDir} placeholder="C:\Modpacks\Mythic Loot" onChange={(event) => { setSourceDir(event.target.value); invalidateRelease(); }} /></label>
-            <label className="field"><span>Version</span><input value={version} placeholder="1.0.0" onChange={(event) => { setVersion(event.target.value); invalidateRelease(); }} /></label>
+            <PathField label="Modpack source folder" value={sourceDir} placeholder="Choose the folder containing this release's modpack files" disabled={busy || loadingChoices} onNotice={onNotice} onChange={(value) => { setSourceDir(value); invalidateRelease(); }} />
+            {profile.game === "seven_days" && <p className="field-wide">Choose the Mods folder that you edit, not the whole game folder. It is separate from the player's installation location and can change for each release.</p>}
+            <label className="field"><span>Game version for this release</span><input aria-label="Game version for this release" value={gameVersion} list={`game-versions-${profile.id}`} maxLength={64} onChange={(event) => { setGameVersion(event.target.value); invalidateRelease(); }} /><datalist id={`game-versions-${profile.id}`}>{gameVersions.map((value) => <option key={value} value={value} />)}</datalist><small>Choose a previous version or type a new one. This is separate from your modpack release number.</small></label>
+            <label className="field"><span>Modpack version</span><input value={version} placeholder="1.0.0" onChange={(event) => { setVersion(event.target.value); invalidateRelease(); }} /></label>
+            {profile.game === "minecraft" && <label className="field field-wide"><span>Minecraft loader identity</span><input aria-label="Minecraft loader identity" value={minecraftModLoader} maxLength={120} placeholder="Loader name and exact version" onChange={(event) => { setMinecraftModLoader(event.target.value); invalidateRelease(); }} /><small>Use the exact neoforge-, forge-, fabric-loader- or quilt-loader- identity from this modpack. Both launcher import files use this reviewed value.</small></label>}
             <label className="field"><span>Release date</span><input type="date" value={releaseDate} onChange={(event) => { setReleaseDate(event.target.value); invalidateRelease(); }} /></label>
             <label className="field field-wide"><span>Release notes</span><input value={releaseNotes} maxLength={20000} onChange={(event) => { setReleaseNotes(event.target.value); invalidateRelease(); }} /></label>
           </div>
+          {loadingChoices && <p role="status">Loading saved publishing choices…</p>}
+          {choicesError && <p role="alert">{choicesError} Existing choices have not been overwritten.</p>}
+          <button className="secondary-action publisher-preview" onClick={() => void saveChoices()} disabled={!canPrepareRelease}>Save publishing choices locally</button>
           <div className="safety-note publisher-safety"><FileCheck2 size={15} /> Excludes saves, logs, screenshots, caches, upstream README/changelog documents and known per-user Minecraft files. Credential-shaped runtime content stops the build. Packages at or above 2 GiB are split into ordered, hash-verified 1 GiB release parts.</div>
           <button className="primary-action publisher-preview" onClick={() => void prepareRelease()} disabled={!canPrepareRelease}>
             {busy ? <RefreshCw className="spin" size={17} /> : <Archive size={17} />} Prepare release locally
           </button>
-        </section>
+        </fieldset>
 
         {releasePreview && (
           <section className={`settings-section panel-card package-preview ${releasePreview.ready ? "ready" : "blocked"}`}>
             <div className="section-title">{releasePreview.ready ? <CheckCircle2 /> : <ShieldAlert />}<div><h2>{releasePreview.ready ? "Release preview ready" : "Release blocked by safety checks"}</h2><p>{releasePreview.ready ? "The package and manifest exist locally. Nothing has been uploaded." : "No publishable package was produced. Resolve every issue and prepare again."}</p></div></div>
             <dl className="pack-facts preview-facts">
               <div><dt>Release</dt><dd>{releasePreview.repository} · {releasePreview.tag}</dd></div>
+              <div><dt>Game version</dt><dd>{releasePreview.gameVersion}{releasePreview.minecraftModLoader && ` · ${releasePreview.minecraftModLoader}`}</dd></div>
+              <div><dt>Source folder</dt><dd>{releasePreview.sourceDir}</dd></div>
               <div><dt>Inventory</dt><dd>{releasePreview.fileCount.toLocaleString()} files · {formatBytes(releasePreview.totalBytes)}</dd></div>
+              <div><dt>Optional files retained</dt><dd>{releasePreview.optionalFileCount}</dd></div>
               <div><dt>Excluded runtime entries</dt><dd>{releasePreview.excludedCount.toLocaleString()}</dd></div>
               <div><dt>Changes</dt><dd>{releasePreview.added} added · {releasePreview.changed} changed · {releasePreview.removed} removed</dd></div>
               {releasePreview.ready && <div><dt>Package</dt><dd>{releasePreview.multipart ? `Multipart · ${releasePreview.assets.length} parts` : "Single ZIP"} · {formatBytes(releasePreview.packageBytes)} · SHA-256 {releasePreview.packageSha256.slice(0, 12)}…</dd></div>}

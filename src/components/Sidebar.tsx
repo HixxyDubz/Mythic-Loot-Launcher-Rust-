@@ -1,5 +1,6 @@
 import { Activity, ChevronRight, CloudUpload, Gamepad2, HardDrive, LifeBuoy, Plus, RefreshCw, Settings } from "lucide-react";
 import type { GameProfile, ProfileHealth } from "../types";
+import { useState } from "react";
 
 interface SidebarProps {
   profiles: GameProfile[];
@@ -19,6 +20,9 @@ interface SidebarProps {
 }
 
 export function Sidebar({ profiles, health, selectedId, edition, publisherAvailable, disabled, onSelect, onSettings, onActivity, onStorage, onSupport, onAppUpdate, onPublisher, onAddModpack }: SidebarProps) {
+  const [showArchived, setShowArchived] = useState(false);
+  const archived = edition === "player" ? profiles.filter((p) => !p.catalogVisible) : [];
+  const shown = profiles.filter((p) => edition === "developer" || p.catalogVisible || showArchived);
   return (
     <aside className="sidebar">
       <div className="brand-lockup">
@@ -27,10 +31,10 @@ export function Sidebar({ profiles, health, selectedId, edition, publisherAvaila
       </div>
       <div className="sidebar-heading">
         <span>Your modpacks</span>
-        <span>{profiles.length}</span>
+        <span>{shown.length}</span>
       </div>
       <nav className="profile-list" aria-label="Modpack profiles">
-        {profiles.map((profile) => {
+        {shown.map((profile) => {
           const state = health.find((item) => item.profileId === profile.id);
           const selected = profile.id === selectedId;
           return (
@@ -41,13 +45,13 @@ export function Sidebar({ profiles, health, selectedId, edition, publisherAvaila
               onClick={() => onSelect(profile.id)}
             >
               <span className="profile-art">
-                <img src={profile.logoPath || "/assets/mythic-loot-logo.jpg"} alt="" />
+                <img src={profile.logoPath || "/assets/mythic-loot-logo.jpg"} referrerPolicy="no-referrer" alt="" />
               </span>
               <span className="profile-copy">
                 <strong>{profile.displayName}</strong>
                 <small>
                   <i className={`status-dot ${state?.status ?? "checking"}`} />
-                  {state?.headline ?? "Checking"}
+                  {!profile.catalogVisible && edition === "player" ? "Archived · local files kept" : state?.headline ?? "Checking"}
                 </small>
               </span>
               <ChevronRight size={16} />
@@ -55,6 +59,7 @@ export function Sidebar({ profiles, health, selectedId, edition, publisherAvaila
           );
         })}
       </nav>
+      {archived.length > 0 && <button className="add-modpack" disabled={disabled} onClick={() => setShowArchived(!showArchived)}>{showArchived ? "Hide" : "Show"} archived modpacks ({archived.length})</button>}
       {publisherAvailable && (
         <button className="add-modpack" onClick={onAddModpack} disabled={disabled}>
           <Plus size={16} /> Add modpack

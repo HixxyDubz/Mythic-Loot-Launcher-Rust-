@@ -32,6 +32,9 @@ pub struct PackageRequest {
     pub profile_id: String,
     pub source_dir: String,
     pub version: String,
+    pub game_version: String,
+    #[serde(default)]
+    pub minecraft_mod_loader: String,
     pub release_date: String,
     pub repository: String,
     pub release_notes: String,
@@ -43,6 +46,8 @@ pub struct PackagePreview {
     pub preview_id: String,
     pub profile_id: String,
     pub version: String,
+    pub game_version: String,
+    pub minecraft_mod_loader: String,
     pub tag: String,
     pub repository: String,
     pub source_dir: String,
@@ -50,6 +55,7 @@ pub struct PackagePreview {
     pub package_path: String,
     pub manifest_path: String,
     pub file_count: usize,
+    pub optional_file_count: usize,
     pub excluded_count: usize,
     pub total_bytes: u64,
     pub package_bytes: u64,
@@ -77,6 +83,7 @@ pub struct PackageAssetPreview {
 pub struct ReleasePublication {
     pub profile_id: String,
     pub version: String,
+    pub game_version: String,
     pub repository: String,
     pub tag: String,
     pub manifest_url: String,
@@ -102,6 +109,7 @@ struct SourceFile {
 struct ReleasePlan {
     profile_id: String,
     version: String,
+    game_version: String,
     repository: String,
     tag: String,
     title: String,
@@ -131,11 +139,21 @@ pub fn prepare(app: &AppHandle, request: &PackageRequest) -> Result<PackagePrevi
         .iter()
         .find(|profile| profile.id == request.profile_id)
         .ok_or_else(|| "That modpack profile does not exist".to_string())?;
-    let base = manifest::load_for_profile(app, profile).manifest;
+    let loaded = crate::content_editor::load_authoring(app, profile);
+    if !loaded.summary.valid
+        && (safe_path::safe_join(&storage::data_dir(app)?, &profile.manifest_path)?.exists()
+            || crate::content_editor::draft_path(&storage::data_dir(app)?, profile)?.exists())
+    {
+        return Err(format!(
+            "Repair the invalid manifest before preparing a release: {}",
+            loaded.summary.errors.join("; ")
+        ));
+    }
+    let base = loaded.manifest;
     let output_root = storage::data_dir(app)?.join("publish-previews");
     let username = env::var("USERNAME").unwrap_or_default();
     let user_profile = env::var("USERPROFILE").unwrap_or_default();
-    prepare_at(
+    let preview = prepare_at(
         profile,
         &base,
         request,
@@ -143,7 +161,11 @@ pub fn prepare(app: &AppHandle, request: &PackageRequest) -> Result<PackagePrevi
         &username,
         &user_profile,
         true,
-    )
+    )?;
+    if preview.ready {
+        crate::publishing_choices::save(app, request.clone())?;
+    }
+    Ok(preview)
 }
 
 fn prepare_at(
@@ -182,11 +204,13 @@ fn prepare_at_with_limits(
 ) -> Result<PackagePreview, String> {
     let version = validate_request(profile, request)?;
     let repository = request.repository.trim();
+    safe_path::reject_link_path(Path::new(request.source_dir.trim()))?;
     let source = fs::canonicalize(request.source_dir.trim())
         .map_err(|error| format!("Choose an existing source folder: {error}"))?;
     if !source.is_dir() {
         return Err("The selected source path is not a folder".into());
     }
+    safe_path::reject_link_path(output_root)?;
     fs::create_dir_all(output_root).map_err(|error| {
         format!(
             "Could not create publishing workspace {}: {error}",
@@ -199,7 +223,7 @@ fn prepare_at_with_limits(
             output_root.display()
         )
     })?;
-    if output_root.starts_with(&source) {
+    if output_root.starts_with(&source) || source.starts_with(&output_root) {
         return Err("The publishing workspace must be outside the modpack source folder".into());
     }
 
@@ -217,8 +241,9 @@ fn prepare_at_with_limits(
     let package_name = format!("{}_{}.zip", profile.id, version);
     let manifest_name = format!("{}-manifest.json", profile.id);
     let tag = format!("v{version}");
-    let preview_id = preview_id(profile, request, &scan.files);
+    let preview_id = preview_id(profile, base, request, &scan.files);
     let output_dir = output_root.join(&preview_id);
+    safe_path::reject_link_path(&output_dir)?;
     let package_path = output_dir.join(&package_name);
     let manifest_path = output_dir.join(&manifest_name);
 
@@ -228,6 +253,12 @@ fn prepare_at_with_limits(
         preview_id: preview_id.clone(),
         profile_id: profile.id.clone(),
         version: version.clone(),
+        game_version: request.game_version.trim().into(),
+        minecraft_mod_loader: if profile.game == "minecraft" {
+            request.minecraft_mod_loader.trim().into()
+        } else {
+            String::new()
+        },
         tag: tag.clone(),
         repository: repository.into(),
         source_dir: source.display().to_string(),
@@ -235,6 +266,7 @@ fn prepare_at_with_limits(
         package_path: blank.clone(),
         manifest_path: blank,
         file_count: scan.files.len(),
+        optional_file_count: 0,
         excluded_count: scan.excluded_count,
         total_bytes,
         package_bytes: 0,
@@ -290,7 +322,12 @@ fn prepare_at_with_limits(
     generated.profile_id = profile.id.clone();
     generated.game = profile.game.clone();
     generated.display_name = profile.display_name.clone();
-    generated.required_game_version = profile.required_game_version.clone();
+    generated.required_game_version = request.game_version.trim().into();
+    generated.minecraft_base_mod_loader = if profile.game == "minecraft" {
+        serde_json::json!({"name": request.minecraft_mod_loader.trim()})
+    } else {
+        serde_json::Value::Null
+    };
     generated.modpack_version = version.clone();
     generated.update_url = if multipart {
         String::new()
@@ -311,9 +348,23 @@ fn prepare_at_with_limits(
         Vec::new()
     };
     generated.release_date = request.release_date.clone();
-    generated.files = scan.files.iter().map(file_entry).collect();
+    // Existing optional entries must not silently become mandatory on the next release.
+    let optional: HashSet<_> = base
+        .optional_files
+        .iter()
+        .map(|entry| entry.path.to_ascii_lowercase())
+        .collect();
+    (generated.optional_files, generated.files) = scan
+        .files
+        .iter()
+        .map(file_entry)
+        .map(|mut entry| {
+            entry.required = !optional.contains(&entry.path.to_ascii_lowercase());
+            entry
+        })
+        .partition(|entry| !entry.required);
     generated.obsolete_files = removed_paths;
-    generated.optional_files.clear();
+    preview.optional_file_count = generated.optional_files.len();
     let errors = manifest::validate(&generated, Some(profile));
     if !errors.is_empty() {
         remove_assets(&assets);
@@ -342,6 +393,7 @@ fn prepare_at_with_limits(
         let plan = ReleasePlan {
             profile_id: profile.id.clone(),
             version: version.clone(),
+            game_version: request.game_version.trim().into(),
             repository: repository.into(),
             tag: tag.clone(),
             title: format!("{} {}", profile.display_name, version),
@@ -433,6 +485,7 @@ pub fn publish(preview_id: &str, confirmed: bool) -> Result<PublishedRelease, St
         publication: ReleasePublication {
             profile_id: plan.profile_id,
             version: plan.version,
+            game_version: plan.game_version,
             manifest_url: format!(
                 "https://github.com/{}/releases/latest/download/{}",
                 plan.repository, plan.manifest_file_name
@@ -449,12 +502,30 @@ pub fn publish(preview_id: &str, confirmed: bool) -> Result<PublishedRelease, St
     })
 }
 
-fn validate_request(profile: &GameProfile, request: &PackageRequest) -> Result<String, String> {
+pub(crate) fn validate_request(
+    profile: &GameProfile,
+    request: &PackageRequest,
+) -> Result<String, String> {
     if request.profile_id != profile.id {
         return Err("The release request does not match the selected modpack profile".into());
     }
     publisher::validate_repository_name(request.repository.trim())?;
     validate_artifact_component(&profile.id, "Profile id")?;
+    let game_version = request.game_version.trim();
+    if game_version.is_empty()
+        || game_version.len() > 64
+        || !game_version
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b" ._-+()".contains(&byte))
+    {
+        return Err("Enter the game version for this release (up to 64 letters, numbers, spaces or version punctuation)".into());
+    }
+    if profile.game == "minecraft" {
+        crate::minecraft_setup::split_loader(request.minecraft_mod_loader.trim())?;
+    }
+    if request.source_dir.trim().is_empty() || request.source_dir.len() > 32767 {
+        return Err("Choose the source folder for this release".into());
+    }
     let version = request.version.trim().trim_start_matches('v');
     if version.is_empty()
         || version.len() > 64
@@ -750,6 +821,7 @@ fn diff(base: &Manifest, files: &[SourceFile]) -> (usize, usize, Vec<String>) {
     let old: HashMap<_, _> = base
         .files
         .iter()
+        .chain(base.optional_files.iter())
         .map(|entry| (entry.path.to_ascii_lowercase(), entry))
         .collect();
     let current: HashSet<_> = files
@@ -773,6 +845,7 @@ fn diff(base: &Manifest, files: &[SourceFile]) -> (usize, usize, Vec<String>) {
     let mut removed: Vec<_> = base
         .files
         .iter()
+        .chain(base.optional_files.iter())
         .filter(|entry| !current.contains(&entry.path.to_ascii_lowercase()))
         .map(|entry| entry.path.clone())
         .collect();
@@ -804,12 +877,18 @@ fn file_entry(file: &SourceFile) -> FileEntry {
     }
 }
 
-fn preview_id(profile: &GameProfile, request: &PackageRequest, files: &[SourceFile]) -> String {
+fn preview_id(
+    profile: &GameProfile,
+    base: &Manifest,
+    request: &PackageRequest,
+    files: &[SourceFile],
+) -> String {
     let mut digest = Sha256::new();
     digest.update(profile.id.as_bytes());
-    digest.update(request.version.trim().as_bytes());
-    digest.update(request.release_date.trim().as_bytes());
-    digest.update(request.repository.trim().as_bytes());
+    digest.update(serde_json::to_vec(profile).expect("serializable profile"));
+    digest.update(serde_json::to_vec(base).expect("serializable manifest"));
+    // Every reviewed choice participates in the identity, including release notes and source.
+    digest.update(serde_json::to_vec(request).expect("serializable release request"));
     for file in files {
         digest.update(file.relative.as_bytes());
         digest.update(file.size.to_le_bytes());
@@ -1090,6 +1169,8 @@ mod tests {
             profile_id: "fixture".into(),
             source_dir: source.display().to_string(),
             version: "2.0.0".into(),
+            game_version: "1.21.1".into(),
+            minecraft_mod_loader: "neoforge-21.1.248".into(),
             release_date: "2026-08-24".into(),
             repository: "owner/repository".into(),
             release_notes: "Verified fixture release".into(),
@@ -1154,6 +1235,11 @@ mod tests {
             serde_json::from_slice(&fs::read(&first.manifest_path).unwrap()).unwrap();
         assert!(manifest::validate(&manifest, Some(&profile())).is_empty());
         assert_eq!(manifest.update_sha256, first.package_sha256);
+        assert_eq!(manifest.required_game_version, "1.21.1");
+        assert_eq!(
+            manifest.minecraft_base_mod_loader["name"],
+            "neoforge-21.1.248"
+        );
         assert_eq!(
             manifest.obsolete_files,
             ["mods/already-obsolete.jar", "mods/removed.jar"]
@@ -1165,6 +1251,76 @@ mod tests {
         assert!(zip.by_name("config/settings.toml").is_ok());
         assert!(zip.by_name("user-prefs.json").is_err());
         assert!(zip.by_name("logs/latest.log").is_err());
+    }
+
+    #[test]
+    fn seven_days_release_uses_selected_version_source_and_preserves_optional_classification() {
+        let source = TempDir::new().unwrap();
+        let output = TempDir::new().unwrap();
+        fs::write(source.path().join("ModInfo.xml"), b"<xml/>").unwrap();
+        fs::write(source.path().join("extra.xml"), b"<optional/>").unwrap();
+        let mut profile = profile();
+        profile.game = "seven_days".into();
+        profile.required_game_version = "old-version".into();
+        let mut request = request(source.path());
+        request.game_version = "3.1 (b8)".into();
+        request.minecraft_mod_loader.clear();
+        let base = Manifest {
+            optional_files: vec![FileEntry {
+                path: "extra.xml".into(),
+                ..FileEntry::default()
+            }],
+            ..Manifest::default()
+        };
+        let preview = prepare_at(&profile, &base, &request, output.path(), "", "", false).unwrap();
+        assert!(preview.ready, "{:?}", preview.issues);
+        assert_eq!(preview.game_version, "3.1 (b8)");
+        assert_eq!(preview.optional_file_count, 1);
+        let manifest: Manifest =
+            serde_json::from_slice(&fs::read(&preview.manifest_path).unwrap()).unwrap();
+        assert_eq!(manifest.required_game_version, "3.1 (b8)");
+        assert_eq!(manifest.files.len(), 1);
+        assert_eq!(manifest.optional_files[0].path, "extra.xml");
+        assert!(!manifest.optional_files[0].required);
+        assert!(manifest.minecraft_base_mod_loader.is_null());
+        let json = serde_json::to_string(&manifest).unwrap();
+        assert!(
+            !json.contains(&request.source_dir),
+            "Machine-local paths must not enter the public manifest"
+        );
+        request.game_version = "3.2".into();
+        let changed = prepare_at(&profile, &base, &request, output.path(), "", "", false).unwrap();
+        assert_ne!(preview.preview_id, changed.preview_id);
+        assert!(
+            Path::new(&preview.manifest_path).exists(),
+            "Previous immutable preview remains available"
+        );
+    }
+
+    #[test]
+    fn release_requires_explicit_game_version_and_supported_minecraft_loader() {
+        let source = TempDir::new().unwrap();
+        let mut request = request(source.path());
+        request.game_version.clear();
+        assert!(
+            validate_request(&profile(), &request)
+                .unwrap_err()
+                .contains("game version")
+        );
+        request.game_version = "1.21.1".into();
+        for invalid in [
+            "",
+            "invented-1",
+            "neoforge-",
+            "forge-1\nsecret",
+            "forge-../1",
+        ] {
+            request.minecraft_mod_loader = invalid.into();
+            assert!(
+                validate_request(&profile(), &request).is_err(),
+                "accepted {invalid}"
+            );
+        }
     }
 
     #[test]
@@ -1314,6 +1470,7 @@ mod tests {
         let plan = ReleasePlan {
             profile_id: "fixture".into(),
             version: "1.0.0".into(),
+            game_version: "1.21.1".into(),
             repository: "owner/repository".into(),
             tag: "v1.0.0".into(),
             title: "Fixture".into(),
@@ -1357,6 +1514,8 @@ mod tests {
             profile_id: profile.id.clone(),
             source_dir: source.display().to_string(),
             version: "1.0.1-acceptance".into(),
+            game_version: "1.0".into(),
+            minecraft_mod_loader: String::new(),
             release_date: "2026-08-28".into(),
             repository: "HixxyDubz/Mythic-Loot-7DTD-Modpack".into(),
             release_notes: "Local acceptance only; never published".into(),

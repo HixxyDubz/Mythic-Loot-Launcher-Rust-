@@ -73,7 +73,7 @@ pub fn prepare(app: &AppHandle, profile_id: &str) -> Result<ContentReleasePrevie
         .iter()
         .find(|profile| profile.id == profile_id)
         .ok_or_else(|| "That modpack profile does not exist".to_string())?;
-    let loaded = manifest::load_for_profile(app, profile);
+    let loaded = crate::content_editor::load_authoring(app, profile);
     let output_root = storage::data_dir(app)?.join("content-release-previews");
     prepare_at(
         profile,

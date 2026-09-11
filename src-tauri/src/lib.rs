@@ -17,8 +17,11 @@ mod models;
 mod operations;
 #[cfg(feature = "developer")]
 mod packager;
+mod path_picker;
 #[cfg(feature = "developer")]
 mod publisher;
+#[cfg(feature = "developer")]
+mod publishing_choices;
 mod readiness;
 mod remote;
 mod restore_points;
@@ -36,8 +39,11 @@ use minecraft_setup::{MinecraftBootstrapArtifact, MinecraftBootstrapRequest};
 use models::{BootstrapPayload, DetectedInstall, GameProfile, LaunchOutcome, ReadinessStatus};
 #[cfg(feature = "developer")]
 use packager::{PackagePreview, PackageRequest, ReleasePublication};
+use path_picker::choose_local_path;
 #[cfg(feature = "developer")]
 use publisher::{PublisherStatus, RepositoryCreation, RepositoryRequest};
+#[cfg(feature = "developer")]
+use publishing_choices::{load_publishing_choices, save_publishing_choices};
 use restore_points::{RestoreOutcome, RestorePointSummary, RestorePreview};
 use safe_launch::{SafeLaunchOutcome, SafeLaunchRecovery, SafeLaunchStatus};
 use self_update::{AppUpdateApplyOutcome, AppUpdatePreview, AppUpdateResult, AppUpdateStage};
@@ -94,6 +100,7 @@ fn apply_release_publication(
             )
         })?;
     profile.required_modpack_version = publication.version.clone();
+    profile.required_game_version = publication.game_version.clone();
     profile.manifest_url = publication.manifest_url.clone();
     profile.update_source.clear();
     profile.catalog_visible = true;
@@ -111,7 +118,16 @@ fn payload(app: &AppHandle) -> Result<BootstrapPayload, String> {
     let loaded: Vec<_> = config
         .profiles
         .iter()
-        .map(|profile| manifest::load_for_profile(app, profile))
+        .map(|profile| {
+            #[cfg(feature = "developer")]
+            {
+                content_editor::load_authoring(app, profile)
+            }
+            #[cfg(not(feature = "developer"))]
+            {
+                manifest::load_for_profile(app, profile)
+            }
+        })
         .collect();
     let manifests: Vec<_> = loaded.iter().map(|loaded| loaded.summary.clone()).collect();
     let health = config
@@ -484,6 +500,7 @@ mod publication_command_tests {
         let publication = ReleasePublication {
             profile_id: "minecraft_main".into(),
             version: "2.0.0".into(),
+            game_version: "1.21.2".into(),
             repository: "owner/repository".into(),
             tag: "v2.0.0".into(),
             manifest_url: "https://github.com/owner/repository/releases/latest/download/minecraft_main-manifest.json".into(),
@@ -492,6 +509,7 @@ mod publication_command_tests {
         };
         apply_release_publication(&mut config, &publication).unwrap();
         assert_eq!(config.profiles[0].required_modpack_version, "2.0.0");
+        assert_eq!(config.profiles[0].required_game_version, "1.21.2");
         assert_eq!(config.profiles[0].manifest_url, publication.manifest_url);
         assert!(config.profiles[0].update_source.is_empty());
         assert!(config.profiles[0].catalog_visible);
@@ -1017,6 +1035,7 @@ fn launch_profile(app: AppHandle, profile_id: String) -> Result<LaunchOutcome, S
 pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event
                 && !operations::request_close() {
@@ -1039,6 +1058,7 @@ pub fn run() {
 
     #[cfg(feature = "developer")]
     let builder = builder.invoke_handler(tauri::generate_handler![
+        choose_local_path,
         bootstrap,
         list_activity,
         clear_finished_activity,
@@ -1061,6 +1081,8 @@ pub fn run() {
         github_publisher_status,
         create_github_repository,
         prepare_modpack_release,
+        load_publishing_choices,
+        save_publishing_choices,
         publish_modpack_release,
         prepare_public_catalog,
         publish_public_catalog,
@@ -1081,6 +1103,7 @@ pub fn run() {
 
     #[cfg(not(feature = "developer"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
+        choose_local_path,
         bootstrap,
         list_activity,
         clear_finished_activity,

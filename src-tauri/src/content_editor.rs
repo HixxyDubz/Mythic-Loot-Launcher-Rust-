@@ -1,10 +1,13 @@
-use std::path::Path;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
 use crate::{
-    manifest::{self, ChangelogEntry, Manifest, RulesGuide},
+    manifest::{self, ChangelogEntry, LoadedManifest, Manifest, RulesGuide},
     models::GameProfile,
     remote, safe_path, storage,
 };
@@ -23,21 +26,112 @@ pub fn save_for_profile(
     profile: &GameProfile,
     content: ManifestContentInput,
 ) -> Result<bool, String> {
-    let destination = safe_path::safe_join(&storage::data_dir(app)?, &profile.manifest_path)?;
-    let loaded = manifest::load_for_profile(app, profile);
-    let mut candidate = if loaded.summary.valid {
-        loaded.manifest
-    } else if !destination.exists() {
-        draft_manifest(profile)?
-    } else {
-        return Err(format!(
-            "The existing local manifest is invalid and was left unchanged: {}",
-            loaded.summary.errors.join("; ")
-        ));
-    };
+    save_at(
+        &storage::data_dir(app)?,
+        profile,
+        manifest::load_for_profile(app, profile),
+        content,
+    )
+}
 
-    apply_content(&mut candidate, profile, content)?;
-    write_manifest(&destination, &candidate)
+pub(crate) fn draft_path(root: &Path, profile: &GameProfile) -> Result<PathBuf, String> {
+    crate::validate_profile_id(&profile.id)?;
+    safe_path::safe_join(root, &format!("content-drafts/{}.json", profile.id))
+}
+
+pub fn load_authoring(app: &AppHandle, profile: &GameProfile) -> LoadedManifest {
+    let published = manifest::load_for_profile(app, profile);
+    match storage::data_dir(app) {
+        Ok(root) => load_authoring_at(&root, profile, published),
+        Err(error) => manifest::invalid_loaded(profile, error),
+    }
+}
+
+fn authoring_base(
+    root: &Path,
+    profile: &GameProfile,
+    loaded: LoadedManifest,
+) -> Result<Manifest, String> {
+    let published_path = safe_path::safe_join(root, &profile.manifest_path)?;
+    safe_path::reject_link_path(&published_path)?;
+    if loaded.summary.valid {
+        return Ok(loaded.manifest);
+    }
+    // Only new, unpublished profiles may start empty. Never conceal a damaged local manifest.
+    if !published_path.exists() {
+        return draft_manifest(profile);
+    }
+    Err(format!(
+        "The existing local manifest is invalid and was left unchanged: {}",
+        loaded.summary.errors.join("; ")
+    ))
+}
+
+fn load_authoring_at(
+    root: &Path,
+    profile: &GameProfile,
+    published: LoadedManifest,
+) -> LoadedManifest {
+    let source = published.summary.source.clone();
+    let result = (|| {
+        let path = draft_path(root, profile)?;
+        safe_path::reject_link_path(&path)?;
+        if !path
+            .try_exists()
+            .map_err(|error| format!("Could not inspect content draft: {error}"))?
+        {
+            return Ok(None);
+        }
+        if fs::metadata(&path)
+            .map_err(|error| error.to_string())?
+            .len()
+            > 8 * 1024 * 1024
+        {
+            return Err("The saved content draft exceeds the size limit".into());
+        }
+        let content = serde_json::from_slice::<ManifestContentInput>(
+            &fs::read(&path).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| format!("Could not read content draft: {error}"))?;
+        Ok(Some((path, content)))
+    })();
+    match result {
+        Ok(None) => published,
+        Ok(Some((path, content))) => {
+            let candidate = authoring_base(root, profile, published).and_then(|mut candidate| {
+                apply_content(&mut candidate, profile, content)?;
+                Ok(candidate)
+            });
+            match candidate {
+                Ok(manifest) => LoadedManifest {
+                    summary: manifest::summarize(
+                        &manifest,
+                        format!("Local content draft {} over {source}", path.display()),
+                        Vec::new(),
+                    ),
+                    manifest,
+                },
+                Err(error) => manifest::invalid_loaded(profile, error),
+            }
+        }
+        Err(error) => manifest::invalid_loaded(profile, error),
+    }
+}
+
+fn save_at(
+    root: &Path,
+    profile: &GameProfile,
+    published: LoadedManifest,
+    content: ManifestContentInput,
+) -> Result<bool, String> {
+    let mut candidate = authoring_base(root, profile, published)?;
+    apply_content(&mut candidate, profile, content.clone())?;
+    // Persist only presentation fields, never inventory or download URLs that a refresh may change.
+    let path = draft_path(root, profile)?;
+    safe_path::reject_link_path(&path)?;
+    let mut bytes = serde_json::to_vec_pretty(&content).map_err(|error| error.to_string())?;
+    bytes.push(b'\n');
+    remote::write_atomic(&path, &bytes)
 }
 
 fn draft_manifest(profile: &GameProfile) -> Result<Manifest, String> {
@@ -75,13 +169,6 @@ fn apply_content(
     }
     *manifest = candidate;
     Ok(())
-}
-
-fn write_manifest(path: &Path, manifest: &Manifest) -> Result<bool, String> {
-    let mut bytes = serde_json::to_vec_pretty(manifest)
-        .map_err(|error| format!("Could not serialize the trusted manifest: {error}"))?;
-    bytes.push(b'\n');
-    remote::write_atomic(path, &bytes)
 }
 
 #[cfg(test)]
@@ -211,5 +298,57 @@ mod tests {
         assert_eq!(manifest.game, profile.game);
         assert_eq!(manifest.modpack_version, profile.required_modpack_version);
         assert!(manifest::validate(&manifest, Some(&profile)).is_empty());
+    }
+
+    fn loaded(manifest: Manifest) -> LoadedManifest {
+        LoadedManifest {
+            summary: manifest::summarize(&manifest, "published".into(), Vec::new()),
+            manifest,
+        }
+    }
+
+    #[test]
+    fn refresh_keeps_draft_presentation_and_uses_new_distribution() {
+        let root = tempfile::TempDir::new().unwrap();
+        let profile = profile();
+        let published_path = safe_path::safe_join(root.path(), &profile.manifest_path).unwrap();
+        remote::write_atomic(&published_path, &serde_json::to_vec(&manifest()).unwrap()).unwrap();
+        let old_bytes = fs::read(&published_path).unwrap();
+        save_at(root.path(), &profile, loaded(manifest()), content()).unwrap();
+        assert_eq!(
+            fs::read(&published_path).unwrap(),
+            old_bytes,
+            "Saving a draft must not edit the downloaded manifest"
+        );
+        let mut refreshed = manifest();
+        refreshed.modpack_version = "5.0.0".into();
+        refreshed.update_url = "https://example.invalid/new.zip".into();
+        refreshed.files[0].hash = "d".repeat(64);
+        refreshed.announcement = "Published older news".into();
+        remote::write_atomic(&published_path, &serde_json::to_vec(&refreshed).unwrap()).unwrap();
+        let authoring = load_authoring_at(root.path(), &profile, loaded(refreshed));
+        assert!(authoring.summary.valid, "{:?}", authoring.summary.errors);
+        assert_eq!(authoring.manifest.announcement, "A real announcement");
+        assert_eq!(authoring.manifest.modpack_version, "5.0.0");
+        assert_eq!(
+            authoring.manifest.update_url,
+            "https://example.invalid/new.zip"
+        );
+        assert_eq!(authoring.manifest.files[0].hash, "d".repeat(64));
+        let raw_draft = fs::read_to_string(draft_path(root.path(), &profile).unwrap()).unwrap();
+        assert!(!raw_draft.contains("updateUrl"));
+        assert!(!raw_draft.contains("optionalFiles"));
+    }
+
+    #[test]
+    fn invalid_draft_is_reported_instead_of_silently_discarded() {
+        let root = tempfile::TempDir::new().unwrap();
+        let profile = profile();
+        let draft = draft_path(root.path(), &profile).unwrap();
+        remote::write_atomic(&draft, b"broken json").unwrap();
+        let result = load_authoring_at(root.path(), &profile, loaded(manifest()));
+        assert!(!result.summary.valid);
+        assert!(result.summary.errors[0].contains("draft"));
+        assert_eq!(fs::read(draft).unwrap(), b"broken json");
     }
 }

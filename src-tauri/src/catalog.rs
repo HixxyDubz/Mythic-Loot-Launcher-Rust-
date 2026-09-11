@@ -118,6 +118,10 @@ pub fn refresh(app: &AppHandle) -> Result<RefreshSummary, String> {
     let mut manifests_changed = 0;
     let mut manifest_failures = 0;
     for profile in &config.profiles {
+        #[cfg(not(feature = "developer"))]
+        if !profile.catalog_visible {
+            continue;
+        }
         if profile.manifest_url.trim().is_empty() {
             continue;
         }
@@ -221,6 +225,17 @@ pub fn validate(catalog: &PublicCatalog) -> Result<(), String> {
 #[cfg(any(not(feature = "developer"), test))]
 pub fn merge(config: &mut LauncherConfig, catalog: &PublicCatalog) -> usize {
     let mut changed = 0;
+    let selected_was_visible = config
+        .profiles
+        .iter()
+        .any(|p| p.id == config.selected_profile_id && p.catalog_visible);
+    let published_ids: HashSet<_> = catalog.profiles.iter().map(|p| p.id.as_str()).collect();
+    for profile in &mut config.profiles {
+        if profile.catalog_visible && !published_ids.contains(profile.id.as_str()) {
+            profile.catalog_visible = false;
+            changed += 1;
+        }
+    }
     for published in &catalog.profiles {
         if let Some(existing) = config
             .profiles
@@ -235,11 +250,21 @@ pub fn merge(config: &mut LauncherConfig, catalog: &PublicCatalog) -> usize {
             changed += 1;
         }
     }
+    if selected_was_visible
+        && !config
+            .profiles
+            .iter()
+            .any(|p| p.id == config.selected_profile_id && p.catalog_visible)
+        && let Some(visible) = config.profiles.iter().find(|p| p.catalog_visible)
+    {
+        config.selected_profile_id = visible.id.clone();
+    }
     changed
 }
 
 #[cfg(any(not(feature = "developer"), test))]
 fn apply_public(profile: &mut GameProfile, published: &CatalogProfile) {
+    profile.catalog_visible = true;
     profile.game.clone_from(&published.game);
     profile.display_name.clone_from(&published.display_name);
     profile
@@ -330,7 +355,7 @@ mod tests {
     #[test]
     fn catalogue_merge_adds_public_data_without_machine_paths() {
         let mut config = LauncherConfig::default();
-        assert_eq!(merge(&mut config, &catalog()), 1);
+        assert_eq!(merge(&mut config, &catalog()), 3);
         let profile = config
             .profiles
             .iter()
@@ -351,7 +376,7 @@ mod tests {
         config.profiles[0].install_dir = "C:\\Player\\Minecraft".into();
         config.profiles[0].game_exe_path = "C:\\Launcher.exe".into();
         config.profiles[0].local_modpack_version = "0.9.0".into();
-        assert_eq!(merge(&mut config, &published), 1);
+        assert_eq!(merge(&mut config, &published), 2);
         assert_eq!(config.profiles[0].display_name, "Published Minecraft");
         assert_eq!(config.profiles[0].install_dir, "C:\\Player\\Minecraft");
         assert_eq!(config.profiles[0].game_exe_path, "C:\\Launcher.exe");
@@ -377,5 +402,41 @@ mod tests {
         assert_eq!(catalog.profiles.len(), 2);
         assert_eq!(catalog.profiles[0].id, "minecraft_main");
         assert_eq!(catalog.profiles[1].id, "seven_days_main");
+    }
+
+    #[test]
+    fn removed_profiles_are_archived_reselectable_and_restorable_without_losing_local_state() {
+        let mut config = LauncherConfig::default();
+        config.profiles[0].install_dir = "C:\\Player\\Minecraft".into();
+        config.profiles[0].local_modpack_version = "1.0.0".into();
+        let mut published = catalog();
+        merge(&mut config, &published);
+        assert!(!config.profiles[0].catalog_visible);
+        assert_eq!(config.selected_profile_id, "new_pack");
+        config.selected_profile_id = "minecraft_main".into();
+        assert_eq!(merge(&mut config, &published), 0);
+        assert_eq!(
+            config.selected_profile_id, "minecraft_main",
+            "Archived installations remain accessible"
+        );
+        published.profiles[0].id = "minecraft_main".into();
+        merge(&mut config, &published);
+        assert!(config.profiles[0].catalog_visible);
+        assert_eq!(config.profiles[0].install_dir, "C:\\Player\\Minecraft");
+        assert_eq!(config.profiles[0].local_modpack_version, "1.0.0");
+        assert_eq!(config.profiles.len(), 3);
+    }
+
+    #[test]
+    fn empty_catalogue_archives_every_profile_without_deleting_any() {
+        let mut config = LauncherConfig::default();
+        let before = config.clone();
+        let mut empty = catalog();
+        empty.profiles.clear();
+        assert!(validate(&empty).is_ok());
+        assert_eq!(merge(&mut config, &empty), 2);
+        assert_eq!(config.profiles.len(), before.profiles.len());
+        assert_eq!(config.selected_profile_id, before.selected_profile_id);
+        assert!(config.profiles.iter().all(|p| !p.catalog_visible));
     }
 }

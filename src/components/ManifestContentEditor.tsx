@@ -70,7 +70,7 @@ export function ManifestContentEditor({
         <Newspaper />
         <div>
           <h2>Manifest content editor</h2>
-          <p>Edit the real News, Rules and Changelog content shown by Player for this modpack.</p>
+          <p>Edit News, Rules and Changelog in a separate local draft. Refreshing from GitHub keeps this draft; players see it only after you review and publish it.</p>
         </div>
       </div>
 

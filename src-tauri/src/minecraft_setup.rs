@@ -199,10 +199,14 @@ fn write_bootstrap_archive(
     Ok(())
 }
 
-fn split_loader(name: &str) -> Result<(&str, &str), String> {
+pub(crate) fn split_loader(name: &str) -> Result<(&str, &str), String> {
     for kind in ["neoforge", "forge", "fabric-loader", "quilt-loader"] {
         if let Some(version) = name.strip_prefix(&format!("{kind}-"))
-            && !version.trim().is_empty()
+            && !version.is_empty()
+            && version.len() <= 100
+            && version
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || b"._+-".contains(&byte))
         {
             return Ok((kind, version));
         }
@@ -310,5 +314,31 @@ mod tests {
         assert!(prepare_at(&profile, &manifest, "unknown", root.path()).is_err());
         let other = LauncherConfig::default().profiles.remove(1);
         assert!(prepare_at(&other, &manifest, "curseforge", root.path()).is_err());
+    }
+
+    #[test]
+    fn arbitrary_minecraft_profiles_use_reviewed_versions_in_both_import_formats() {
+        let root = TempDir::new().unwrap();
+        let (mut profile, mut manifest) = fixture();
+        profile.id = "another_pack".into();
+        manifest.profile_id = profile.id.clone();
+        manifest.required_game_version = "1.20.1".into();
+        for (kind, version) in [
+            ("forge", "47.3.0"),
+            ("fabric-loader", "0.16.10"),
+            ("quilt-loader", "0.27.1"),
+            ("neoforge", "21.1.248"),
+        ] {
+            let identity = format!("{kind}-{version}");
+            manifest.minecraft_base_mod_loader = json!({"name": identity});
+            let cf = prepare_at(&profile, &manifest, "curseforge", root.path()).unwrap();
+            let data = archive_json(Path::new(&cf.path), "manifest.json");
+            assert_eq!(data["minecraft"]["version"], "1.20.1");
+            assert_eq!(data["minecraft"]["modLoaders"][0]["id"], identity);
+            let mr = prepare_at(&profile, &manifest, "modrinth", root.path()).unwrap();
+            let data = archive_json(Path::new(&mr.path), "modrinth.index.json");
+            assert_eq!(data["dependencies"]["minecraft"], "1.20.1");
+            assert_eq!(data["dependencies"][kind], version);
+        }
     }
 }

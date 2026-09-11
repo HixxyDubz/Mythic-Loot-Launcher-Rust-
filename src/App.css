@@ -581,3 +581,6 @@ h1, h2, h3, p { margin-top: 0; }
   .dashboard { padding-top: 20px; }
   .detail-tabs { margin-top: 18px; margin-bottom: 16px; }
 }
+:root .publisher-fields { min-width: 0; margin: 0; }
+.field > label { display: grid; gap: 8px; }
+.path-browse { align-self: start; justify-self: start; margin-top: 6px; }

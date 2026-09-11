@@ -111,6 +111,8 @@ foreach ($flavor in $flavors) {
             "Manifest URL",
             "create_github_repository",
             "publish_modpack_release",
+            "load_publishing_choices",
+            "save_publishing_choices",
             "prepare_public_catalog",
             "publish_public_catalog",
             "save_manifest_content",

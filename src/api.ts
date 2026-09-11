@@ -25,6 +25,7 @@ import type {
   ModpackPublicationOutcome,
   PackagePreview,
   PackageRequest,
+  PublishingChoices,
   PublisherStatus,
   RepositoryCreation,
   RepositoryRequest,
@@ -45,6 +46,21 @@ import type {
 } from "./types";
 
 const runningInTauri = isTauri();
+
+export async function chooseLocalPath(kind: "folder" | "executable"): Promise<string | null> {
+  requireNative("Local path selection");
+  return invoke<string | null>("choose_local_path", { kind });
+}
+
+export async function loadPublishingChoices(profileId: string): Promise<PublishingChoices> {
+  requireNative("Publishing choices");
+  return invoke<PublishingChoices>("load_publishing_choices", { profileId });
+}
+
+export async function savePublishingChoices(request: PackageRequest): Promise<PublishingChoices> {
+  requireNative("Publishing choices");
+  return invoke<PublishingChoices>("save_publishing_choices", { request });
+}
 
 function requireNative(operation: string): void {
   if (!runningInTauri) {

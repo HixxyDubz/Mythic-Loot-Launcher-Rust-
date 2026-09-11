@@ -50,6 +50,7 @@ export function Dashboard({ profile, health, manifest, verification, busy, onOpe
     : `${manifest.requiredFileCount.toLocaleString()} tracked`;
   return (
     <main className="dashboard">
+      {!profile.catalogVisible && <p className="safety-note">This modpack is not currently listed in the public catalogue. Local settings and installed files are retained.</p>}
       <div className="dashboard-topline">
         <div>
           <span className="eyebrow">MODPACK OVERVIEW</span>
@@ -95,7 +96,7 @@ export function Dashboard({ profile, health, manifest, verification, busy, onOpe
                 </button>
               </div>
             </div>
-            <img className="hero-art" src={profile.logoPath || "/assets/mythic-loot-logo.jpg"} alt="" />
+            <img className="hero-art" src={profile.logoPath || "/assets/mythic-loot-logo.jpg"} alt="" referrerPolicy="no-referrer" />
           </section>
 
           <section className="readiness-card panel-card">
@@ -185,7 +186,7 @@ export function Dashboard({ profile, health, manifest, verification, busy, onOpe
 function NewsContent({ manifest }: { manifest: ManifestSummary }) {
   return (
     <section className="content-page panel-card">
-      {manifest.newsBannerUrl && <img className="news-banner" src={manifest.newsBannerUrl} alt="Modpack news" />}
+      {manifest.newsBannerUrl && <img className="news-banner" src={manifest.newsBannerUrl} alt="Modpack news" referrerPolicy="no-referrer" />}
       <div className="content-heading"><Globe2 /><div><span className="eyebrow">LATEST NEWS</span><h2>Announcements</h2></div></div>
       {manifest.announcement.trim()
         ? <p className="announcement-copy">{manifest.announcement}</p>

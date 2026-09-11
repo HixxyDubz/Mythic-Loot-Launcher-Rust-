@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, Check, HardDrive, Radar, RefreshCw, Save, X } from "lucide-react";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { EditionProfileMetadataSection, launcherEdition } from "@launcher-edition";
+import { PathField } from "./PathField";
 import type { DetectedInstall, GameDefinition, GameProfile, MinecraftBootstrapArtifact, MinecraftBootstrapRequest, MinecraftLauncher } from "../types";
 
 interface SettingsPanelProps {
@@ -96,7 +97,7 @@ export function SettingsPanel({
               <RefreshCw size={17} />
               <div>
                 <strong>CurseForge and Modrinth are supported sync targets</strong>
-                <p>Create or import a Minecraft {draft.requiredGameVersion || "1.21.1"} NeoForge profile in your chosen launcher, run detection, then select that profile below. Update &amp; Repair syncs only trusted manifest files and leaves saves, logs, screenshots, options and launcher account data alone.</p>
+                <p>Create or import a profile using the Minecraft version and loader declared by this modpack, run detection, then select that profile below. The import buttons use the trusted release metadata. Update &amp; Repair syncs only trusted manifest files and leaves saves, logs, screenshots, options and launcher account data alone.</p>
                 <small>{draft.minecraftLauncher ? `Selected launcher: ${launcherLabel(draft.minecraftLauncher)}` : "No launcher profile selected yet."}</small>
                 <div className="bootstrap-actions">
                   <button onClick={() => void prepareBootstrap("curseforge")} disabled={Boolean(preparingLauncher)}>
@@ -121,9 +122,9 @@ export function SettingsPanel({
             </div>
           )}
           <div className="form-stack">
-            <Field label="Game or launcher executable" value={draft.gameExePath} placeholder="C:\Path\To\Game.exe" onChange={(value) => update("gameExePath", value)} />
-            <Field label="Game directory" value={draft.gameDir} placeholder="Optional separate game data directory" onChange={(value) => update("gameDir", value)} />
-            <Field label="Modpack base folder" value={draft.installDir} placeholder="Folder managed by Mythic Loot" onChange={(value) => update("installDir", value)} />
+            <PathField label="Game or launcher executable" kind="executable" value={draft.gameExePath} placeholder="C:\Path\To\Game.exe" disabled={busy} onNotice={onNotice} onChange={(value) => update("gameExePath", value)} />
+            <PathField label="Game directory" value={draft.gameDir} placeholder="Optional separate game data directory" disabled={busy} onNotice={onNotice} onChange={(value) => update("gameDir", value)} />
+            <PathField label="Modpack base folder" value={draft.installDir} placeholder="Folder managed by Mythic Loot" disabled={busy} onNotice={onNotice} onChange={(value) => update("installDir", value)} />
             <label className="field"><span>Installed modpack version</span><input value={draft.localModpackVersion || "Not verified"} readOnly /></label>
             <Field label="Launch arguments" value={draft.launchArgs} placeholder="Optional Windows command arguments" onChange={(value) => update("launchArgs", value)} />
           </div>
