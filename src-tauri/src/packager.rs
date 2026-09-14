@@ -35,6 +35,8 @@ pub struct PackageRequest {
     pub game_version: String,
     #[serde(default)]
     pub minecraft_mod_loader: String,
+    #[serde(default)]
+    pub optional_paths: Option<Vec<String>>,
     pub release_date: String,
     pub repository: String,
     pub release_notes: String,
@@ -228,7 +230,19 @@ fn prepare_at_with_limits(
     }
 
     let scan = scan_source(&source, username, user_profile)?;
+    let optional = optional_inventory(base, request.optional_paths.as_deref(), &scan.files)?;
     let mut issues = scan.issues;
+    if !scan.files.is_empty()
+        && scan
+            .files
+            .iter()
+            .all(|f| optional.contains(&f.relative.to_ascii_lowercase()))
+    {
+        issues.push(
+            "Keep at least one required file in this modpack; the entire pack cannot be optional"
+                .into(),
+        );
+    }
     let total_bytes = scan
         .files
         .iter()
@@ -349,11 +363,6 @@ fn prepare_at_with_limits(
     };
     generated.release_date = request.release_date.clone();
     // Existing optional entries must not silently become mandatory on the next release.
-    let optional: HashSet<_> = base
-        .optional_files
-        .iter()
-        .map(|entry| entry.path.to_ascii_lowercase())
-        .collect();
     (generated.optional_files, generated.files) = scan
         .files
         .iter()
@@ -525,6 +534,16 @@ pub(crate) fn validate_request(
     }
     if request.source_dir.trim().is_empty() || request.source_dir.len() > 32767 {
         return Err("Choose the source folder for this release".into());
+    }
+    if let Some(paths) = &request.optional_paths {
+        if paths.len() > 2000 || paths.iter().map(String::len).sum::<usize>() > 64_000 {
+            return Err(
+                "Optional file selection is too large; select containing folders instead".into(),
+            );
+        }
+        for path in paths {
+            safe_path::normalize_relative(path)?;
+        }
     }
     let version = request.version.trim().trim_start_matches('v');
     if version.is_empty()
@@ -877,6 +896,36 @@ fn file_entry(file: &SourceFile) -> FileEntry {
     }
 }
 
+fn optional_inventory(
+    base: &Manifest,
+    requested: Option<&[String]>,
+    files: &[SourceFile],
+) -> Result<HashSet<String>, String> {
+    let Some(paths) = requested else {
+        return Ok(base
+            .optional_files
+            .iter()
+            .map(|entry| entry.path.to_ascii_lowercase())
+            .collect());
+    };
+    let mut selected = HashSet::new();
+    for path in paths {
+        let prefix = safe_path::normalize_relative(path.trim())?.to_ascii_lowercase();
+        let matches: Vec<_> = files
+            .iter()
+            .map(|file| file.relative.to_ascii_lowercase())
+            .filter(|file| *file == prefix || file.starts_with(&format!("{prefix}/")))
+            .collect();
+        if matches.is_empty() {
+            return Err(format!(
+                "Optional path does not match any publishable source file: {path}"
+            ));
+        }
+        selected.extend(matches);
+    }
+    Ok(selected)
+}
+
 fn preview_id(
     profile: &GameProfile,
     base: &Manifest,
@@ -1171,6 +1220,7 @@ mod tests {
             version: "2.0.0".into(),
             game_version: "1.21.1".into(),
             minecraft_mod_loader: "neoforge-21.1.248".into(),
+            optional_paths: None,
             release_date: "2026-08-24".into(),
             repository: "owner/repository".into(),
             release_notes: "Verified fixture release".into(),
@@ -1321,6 +1371,53 @@ mod tests {
                 "accepted {invalid}"
             );
         }
+    }
+
+    #[test]
+    fn developer_can_select_optional_folders_but_cannot_publish_unknown_optional_paths() {
+        let source = TempDir::new().unwrap();
+        let output = TempDir::new().unwrap();
+        fs::create_dir(source.path().join("BonusMod")).unwrap();
+        fs::write(source.path().join("required.xml"), b"core").unwrap();
+        fs::write(source.path().join("BonusMod/ModInfo.xml"), b"bonus").unwrap();
+        fs::write(source.path().join("BonusMod/config.xml"), b"setting").unwrap();
+        let mut request = request(source.path());
+        request.optional_paths = Some(vec!["BonusMod".into()]);
+        let preview = prepare_at(
+            &profile(),
+            &Manifest::default(),
+            &request,
+            output.path(),
+            "",
+            "",
+            false,
+        )
+        .unwrap();
+        assert!(preview.ready, "{:?}", preview.issues);
+        assert_eq!(preview.optional_file_count, 2);
+        let manifest: Manifest =
+            serde_json::from_slice(&fs::read(&preview.manifest_path).unwrap()).unwrap();
+        assert_eq!(manifest.files.len(), 1);
+        assert!(
+            manifest
+                .optional_files
+                .iter()
+                .all(|f| !f.required && f.path.starts_with("BonusMod/"))
+        );
+        request.optional_paths = Some(vec!["does-not-exist".into()]);
+        assert!(
+            prepare_at(
+                &profile(),
+                &Manifest::default(),
+                &request,
+                output.path(),
+                "",
+                "",
+                false
+            )
+            .unwrap_err()
+            .contains("does not match")
+        );
     }
 
     #[test]
@@ -1516,6 +1613,7 @@ mod tests {
             version: "1.0.1-acceptance".into(),
             game_version: "1.0".into(),
             minecraft_mod_loader: String::new(),
+            optional_paths: None,
             release_date: "2026-08-28".into(),
             repository: "HixxyDubz/Mythic-Loot-7DTD-Modpack".into(),
             release_notes: "Local acceptance only; never published".into(),

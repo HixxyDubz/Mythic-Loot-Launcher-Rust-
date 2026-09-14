@@ -410,6 +410,7 @@ mod tests {
         let root = tempfile::tempdir().expect("temporary directory");
         let config = LauncherConfig::default();
         let mut json = serde_json::to_value(&config).unwrap();
+        json.as_object_mut().unwrap().remove("optionalSelections");
         for profile in json["profiles"].as_array_mut().unwrap() {
             profile.as_object_mut().unwrap().remove("minecraftLauncher");
             profile.as_object_mut().unwrap().remove("catalogVisible");
@@ -421,6 +422,7 @@ mod tests {
         .unwrap();
 
         let loaded = load_or_create_at(root.path()).expect("load older schema two config");
+        assert!(loaded.optional_selections.is_empty());
         assert!(
             loaded
                 .profiles

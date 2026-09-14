@@ -254,6 +254,7 @@ pub fn prepare(
     backup_id: &str,
 ) -> Result<RestorePreview, String> {
     let _operation = crate::operations::MaintenanceGuard::acquire()?;
+    crate::optional_extras::ensure_no_safe_session(app, profile_id)?;
     let config = storage::load_or_create(app)?;
     let profile = config
         .profiles
@@ -273,6 +274,7 @@ pub fn apply(
         return Err("Restoring a backup requires explicit confirmation".into());
     }
     let _operation = crate::operations::MaintenanceGuard::acquire()?;
+    crate::optional_extras::ensure_no_safe_session(app, profile_id)?;
     let plan = restore_plans()
         .lock()
         .map_err(|_| "Restore preview cache is unavailable".to_string())?
@@ -303,6 +305,8 @@ pub fn apply(
                 return Err("The modpack folder changed during restore".into());
             }
             profile.local_modpack_version = plan.metadata.local_modpack_version.clone();
+            // A restored installation determines its extras from the restored files, not a newer choice.
+            config.optional_selections.remove(&plan.profile_id);
             Ok(())
         })
     })

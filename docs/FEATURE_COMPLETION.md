@@ -9,7 +9,8 @@ Rust is the maintained application. Python is read-only behavioral reference, ne
 - [x] Separate newly saved unpublished content drafts from downloaded manifests (0.1.9).
 - [x] Explicit Minecraft loader identity authoring for arbitrary profiles and both launcher bootstrap formats (0.1.9; real imports remain an external check).
 - [ ] Automatic discovery of Minecraft version/loader metadata from the chosen source, without copying launcher account state.
-- [ ] Optional inventory publishing, player extras management, update preservation and Safe Launch integration.
+- [x] Optional inventory publishing, Player extras management, update preservation and Safe Launch protection (0.1.10; controlled file-transaction tests, not gameplay acceptance).
+- [ ] Recover pre-0.1.9 content edits saved inside a downloaded manifest; explicit draft discard/recovery controls.
 - [ ] Java/runtime and memory controls, complete server-free game-folder adapters and local game-version checks.
 - [ ] User preferences: update-check behavior, close-after-launch, reduced motion, theme/font/background/window geometry, opt-in presence.
 - [ ] Crash/session tracking, automatic recovery prompts, log diagnosis and support export.
@@ -32,3 +33,9 @@ Per-release choices are saved in Developer-only `publishing-choices/<profile-id>
 New content saves use presentation-only `content-drafts/<profile-id>.json`; packaging overlays them onto the latest verified distribution inventory. Refresh never writes this draft. This does not automatically recognize pre-0.1.9 edits that were stored inside the same manifest as downloaded content; legacy-draft recovery remains to be addressed before declaring full migration parity.
 
 See `RELEASE_SETUP_0.1.9.md` for testing and distribution boundaries. The remaining unchecked items are actual remaining work, not a feature-complete claim.
+
+## 0.1.10 checkpoint
+
+`OPTIONAL_EXTRAS_0.1.10.md` records the next completed implementation slice. Developer can mark relative files/folders optional. Player can review enabling/disabling extras in Update & Repair. Selections are committed with the installed version in local configuration, scoped to the installation folder. Updates now extract only manifest-listed files and enabled extras, never every ZIP member indiscriminately. Safe Launch session recovery takes precedence over maintenance.
+
+This does not complete the unchecked runtime/preferences, crash/recovery, progress/cancellation or real external acceptance work above.

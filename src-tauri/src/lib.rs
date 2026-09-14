@@ -15,6 +15,7 @@ mod manifest;
 mod minecraft_setup;
 mod models;
 mod operations;
+mod optional_extras;
 #[cfg(feature = "developer")]
 mod packager;
 mod path_picker;
@@ -37,6 +38,7 @@ use activity::{ActivityItem, ActivityKind};
 use manifest::FileVerification;
 use minecraft_setup::{MinecraftBootstrapArtifact, MinecraftBootstrapRequest};
 use models::{BootstrapPayload, DetectedInstall, GameProfile, LaunchOutcome, ReadinessStatus};
+use optional_extras::get_optional_extras;
 #[cfg(feature = "developer")]
 use packager::{PackagePreview, PackageRequest, ReleasePublication};
 use path_picker::choose_local_path;
@@ -967,16 +969,29 @@ async fn verify_profile_files(
             || {
                 let _operation = operations::MaintenanceGuard::acquire()?;
                 let config = storage::load_or_create(&app)?;
+                optional_extras::ensure_no_safe_session(&app, &profile_id)?;
                 let profile = config
                     .profiles
-                    .into_iter()
+                    .iter()
                     .find(|profile| profile.id == profile_id)
                     .ok_or_else(|| "That modpack profile does not exist".to_string())?;
-                let loaded = manifest::load_for_profile(&app, &profile);
+                let loaded = manifest::load_for_profile(&app, profile);
                 if !loaded.summary.valid {
                     return Err(loaded.summary.errors.join("; "));
                 }
-                manifest::verify_required_files(&profile, &loaded.manifest)
+                let selection = optional_extras::resolve(
+                    profile,
+                    &loaded.manifest,
+                    config.optional_selections.get(&profile_id),
+                    None,
+                )?;
+                let effective = optional_extras::effective_manifest(
+                    profile,
+                    &loaded.manifest,
+                    &selection,
+                    false,
+                )?;
+                manifest::verify_required_files(profile, &effective)
             },
             |verification| {
                 let failures = verification.missing.len()
@@ -1059,6 +1074,7 @@ pub fn run() {
     #[cfg(feature = "developer")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         choose_local_path,
+        get_optional_extras,
         bootstrap,
         list_activity,
         clear_finished_activity,
@@ -1104,6 +1120,7 @@ pub fn run() {
     #[cfg(not(feature = "developer"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         choose_local_path,
+        get_optional_extras,
         bootstrap,
         list_activity,
         clear_finished_activity,

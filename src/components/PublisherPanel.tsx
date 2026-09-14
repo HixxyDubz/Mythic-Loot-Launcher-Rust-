@@ -58,6 +58,7 @@ export function PublisherPanel({ profile, manifest, onBack, onNotice, onPayload 
   const [gameVersion, setGameVersion] = useState(profile.requiredGameVersion);
   const [gameVersions, setGameVersions] = useState<string[]>([profile.requiredGameVersion].filter(Boolean));
   const [minecraftModLoader, setMinecraftModLoader] = useState("");
+  const [optionalPaths, setOptionalPaths] = useState("");
   const [loadingChoices, setLoadingChoices] = useState(true);
   const [choicesError, setChoicesError] = useState("");
   const [releaseDate, setReleaseDate] = useState(new Date().toISOString().slice(0, 10));
@@ -80,6 +81,7 @@ export function PublisherPanel({ profile, manifest, onBack, onNotice, onPayload 
       setRepository(saved.repository); setSourceDir(saved.sourceDir); setVersion(saved.version);
       setGameVersion(saved.gameVersion); setGameVersions(choices.gameVersions);
       setMinecraftModLoader(saved.minecraftModLoader); setReleaseDate(saved.releaseDate); setReleaseNotes(saved.releaseNotes);
+      setOptionalPaths((saved.optionalPaths ?? []).join("\n"));
     }).catch((error) => { if (active) setChoicesError(errorMessage(error)); })
       .finally(() => { if (active) setLoadingChoices(false); });
     return () => { active = false; };
@@ -87,6 +89,7 @@ export function PublisherPanel({ profile, manifest, onBack, onNotice, onPayload 
 
   const releaseRequest: PackageRequest = {
     profileId: profile.id, sourceDir, version, gameVersion, minecraftModLoader, releaseDate, repository, releaseNotes,
+    optionalPaths: optionalPaths.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
   };
 
   async function saveChoices() {
@@ -298,6 +301,7 @@ export function PublisherPanel({ profile, manifest, onBack, onNotice, onPayload 
             {profile.game === "minecraft" && <label className="field field-wide"><span>Minecraft loader identity</span><input aria-label="Minecraft loader identity" value={minecraftModLoader} maxLength={120} placeholder="Loader name and exact version" onChange={(event) => { setMinecraftModLoader(event.target.value); invalidateRelease(); }} /><small>Use the exact neoforge-, forge-, fabric-loader- or quilt-loader- identity from this modpack. Both launcher import files use this reviewed value.</small></label>}
             <label className="field"><span>Release date</span><input type="date" value={releaseDate} onChange={(event) => { setReleaseDate(event.target.value); invalidateRelease(); }} /></label>
             <label className="field field-wide"><span>Release notes</span><input value={releaseNotes} maxLength={20000} onChange={(event) => { setReleaseNotes(event.target.value); invalidateRelease(); }} /></label>
+            <label className="field field-wide"><span>Optional files or folders (one relative path per line)</span><textarea aria-label="Optional files or folders" value={optionalPaths} maxLength={64000} onChange={(event) => { setOptionalPaths(event.target.value); invalidateRelease(); }} /><small>Paths are relative to the source folder. Folder selections include every publishable file beneath them. Leave blank to make all files required. Players choose extras in Update &amp; Repair; Safe Launch temporarily disables installed extras.</small></label>
           </div>
           {loadingChoices && <p role="status">Loading saved publishing choices…</p>}
           {choicesError && <p role="alert">{choicesError} Existing choices have not been overwritten.</p>}

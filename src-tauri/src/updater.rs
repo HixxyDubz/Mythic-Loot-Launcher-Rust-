@@ -17,8 +17,8 @@ use zip::{ZipWriter, write::SimpleFileOptions};
 
 use crate::{
     manifest::{self, FileEntry, Manifest},
-    models::GameProfile,
-    restore_points, safe_path, storage,
+    models::{GameProfile, OptionalSelection},
+    optional_extras, restore_points, safe_path, storage,
 };
 
 const FREE_SPACE_BUFFER: u64 = 64 * 1024 * 1024;
@@ -35,6 +35,8 @@ pub enum TransactionKind {
 pub struct TransactionRequest {
     pub profile_id: String,
     pub kind: TransactionKind,
+    #[serde(default)]
+    pub optional_files: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,6 +56,7 @@ pub struct TransactionPreview {
     pub ready: bool,
     pub nothing_to_do: bool,
     pub message: String,
+    pub optional_selection: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,6 +95,9 @@ struct TransactionPlan {
     manifest: Manifest,
     inventory: Vec<StageEntry>,
     obsolete_paths: Vec<String>,
+    selection_before: Option<OptionalSelection>,
+    selection_after: Option<OptionalSelection>,
+    file_only_removals: Vec<String>,
 }
 
 static TRANSACTION_PLANS: OnceLock<Mutex<HashMap<String, TransactionPlan>>> = OnceLock::new();
@@ -101,6 +107,7 @@ pub fn prepare(
     request: &TransactionRequest,
 ) -> Result<TransactionPreview, String> {
     let _operation = crate::operations::MaintenanceGuard::acquire()?;
+    optional_extras::ensure_no_safe_session(app, &request.profile_id)?;
     let config = storage::load_or_create(app)?;
     let profile = config
         .profiles
@@ -115,7 +122,54 @@ pub fn prepare(
         ));
     }
     let data_dir = storage::data_dir(app)?;
-    prepare_at(profile, &loaded.manifest, request.kind, &data_dir, true)
+    let before = config.optional_selections.get(&profile.id).cloned();
+    prepare_selected_at(
+        profile,
+        &loaded.manifest,
+        request.kind,
+        &data_dir,
+        true,
+        before.as_ref(),
+        request.optional_files.as_deref(),
+    )
+}
+
+fn prepare_selected_at(
+    profile: &GameProfile,
+    manifest: &Manifest,
+    kind: TransactionKind,
+    data_dir: &Path,
+    remember: bool,
+    before: Option<&OptionalSelection>,
+    requested: Option<&[String]>,
+) -> Result<TransactionPreview, String> {
+    let selection = optional_extras::resolve(profile, manifest, before, requested)?;
+    let effective =
+        optional_extras::effective_manifest(profile, manifest, &selection, requested.is_some())?;
+    let mut preview = prepare_at_with_review(
+        profile,
+        &effective,
+        kind,
+        data_dir,
+        remember,
+        requested.is_some(),
+    )?;
+    preview.optional_selection = Some(selection.enabled.clone());
+    if let Some(plan) = transaction_plans()
+        .lock()
+        .map_err(|_| "Update preview cache is unavailable")?
+        .get_mut(&preview.preview_id)
+    {
+        plan.selection_before = before.cloned();
+        plan.file_only_removals = manifest
+            .optional_files
+            .iter()
+            .filter(|file| !selection.enabled.contains(&file.path))
+            .map(|file| file.path.clone())
+            .collect();
+        plan.selection_after = Some(selection);
+    }
+    Ok(preview)
 }
 
 pub fn apply(
@@ -126,6 +180,7 @@ pub fn apply(
 ) -> Result<TransactionOutcome, String> {
     require_confirmation(confirmed)?;
     let _operation = crate::operations::MaintenanceGuard::acquire()?;
+    optional_extras::ensure_no_safe_session(app, profile_id)?;
     let plan = transaction_plans()
         .lock()
         .map_err(|_| "Update preview cache is unavailable".to_string())?
@@ -133,6 +188,11 @@ pub fn apply(
         .ok_or_else(|| "Prepare a fresh update or repair preview before applying".to_string())?;
 
     let config = storage::load_or_create(app)?;
+    if plan.selection_after.is_some()
+        && config.optional_selections.get(&plan.profile_id) != plan.selection_before.as_ref()
+    {
+        return Err("Optional file choices changed after review; prepare a fresh candidate".into());
+    }
     require_profile_match(profile_id, &plan.profile_id, &config.selected_profile_id)?;
     let profile = config
         .profiles
@@ -144,19 +204,39 @@ pub fn apply(
         return Err("The modpack folder changed after preview; prepare again".into());
     }
     execute_plan(&plan, None, || {
-        storage::update(app, |config| {
-            let profile = config
-                .profiles
-                .iter_mut()
-                .find(|p| p.id == plan.profile_id)
-                .ok_or("The updated modpack profile no longer exists")?;
-            if Path::new(&profile.install_dir) != plan.install_dir {
-                return Err("The modpack folder changed during update".into());
-            }
-            profile.local_modpack_version = plan.version.clone();
-            Ok(())
-        })
+        storage::update(app, |config| finalize_configuration(config, &plan))
     })
+}
+
+fn finalize_configuration(
+    config: &mut crate::models::LauncherConfig,
+    plan: &TransactionPlan,
+) -> Result<(), String> {
+    require_profile_match(
+        &plan.profile_id,
+        &plan.profile_id,
+        &config.selected_profile_id,
+    )?;
+    if plan.selection_after.is_some()
+        && config.optional_selections.get(&plan.profile_id) != plan.selection_before.as_ref()
+    {
+        return Err("Optional file choices changed during update".into());
+    }
+    let profile = config
+        .profiles
+        .iter_mut()
+        .find(|p| p.id == plan.profile_id)
+        .ok_or("The updated modpack profile no longer exists")?;
+    if Path::new(&profile.install_dir) != plan.install_dir {
+        return Err("The modpack folder changed during update".into());
+    }
+    profile.local_modpack_version = plan.version.clone();
+    if let Some(selection) = &plan.selection_after {
+        config
+            .optional_selections
+            .insert(plan.profile_id.clone(), selection.clone());
+    }
+    Ok(())
 }
 
 pub(crate) fn require_profile_match(
@@ -178,12 +258,24 @@ fn require_confirmation(confirmed: bool) -> Result<(), String> {
     }
 }
 
+#[cfg(test)]
 fn prepare_at(
     profile: &GameProfile,
     manifest: &Manifest,
     kind: TransactionKind,
     data_dir: &Path,
     remember_plan: bool,
+) -> Result<TransactionPreview, String> {
+    prepare_at_with_review(profile, manifest, kind, data_dir, remember_plan, false)
+}
+
+fn prepare_at_with_review(
+    profile: &GameProfile,
+    manifest: &Manifest,
+    kind: TransactionKind,
+    data_dir: &Path,
+    remember_plan: bool,
+    force_review: bool,
 ) -> Result<TransactionPreview, String> {
     let manifest_issues = manifest::validate(manifest, Some(profile));
     if !manifest_issues.is_empty() {
@@ -230,6 +322,7 @@ fn prepare_at(
         let obsolete_existing = existing_obsolete(manifest, &install_dir)?;
         let version_current = version_marker_matches(&install_dir, &manifest.modpack_version);
         let nothing_to_do = kind == TransactionKind::Repair
+            && !force_review
             && bad_required.is_empty()
             && obsolete_existing.is_empty()
             && version_current;
@@ -237,27 +330,41 @@ fn prepare_at(
             return Ok((String::new(), Vec::new(), obsolete_existing, true));
         }
 
+        let direct_only = kind == TransactionKind::Repair
+            && !bad_required.is_empty()
+            && bad_required
+                .iter()
+                .all(|entry| entry.download_url.starts_with("https://"));
         let source = if kind == TransactionKind::Repair && bad_required.is_empty() {
             String::new()
+        } else if direct_only {
+            "Trusted per-file HTTPS downloads".into()
         } else {
             prepare_package(profile, manifest, &stage_root)?
         };
         let wanted = if kind == TransactionKind::Repair {
-            Some(
-                bad_required
-                    .iter()
-                    .map(|entry| entry.path.to_ascii_lowercase())
-                    .collect::<HashSet<_>>(),
-            )
+            bad_required
+                .iter()
+                .map(|entry| entry.path.to_ascii_lowercase())
+                .collect::<HashSet<_>>()
         } else {
-            None
+            manifest
+                .files
+                .iter()
+                .map(|entry| entry.path.to_ascii_lowercase())
+                .collect::<HashSet<_>>()
         };
-        if !source.is_empty() {
-            extract_validated_package(
-                &stage_root.join("update.zip"),
-                &content_dir,
-                wanted.as_ref(),
-            )?;
+        if !source.is_empty() && !direct_only {
+            extract_validated_package(&stage_root.join("update.zip"), &content_dir, Some(&wanted))?;
+        }
+        // Legacy manifests may provide extras as individual HTTPS files instead of ZIP members.
+        for entry in &bad_required {
+            let target = safe_path::safe_join(&content_dir, &entry.path)?;
+            if !target.exists() && entry.download_url.starts_with("https://") {
+                fs::create_dir_all(target.parent().unwrap_or(&content_dir))
+                    .map_err(|error| error.to_string())?;
+                download_https(&entry.download_url, &target)?;
+            }
         }
         let inventory = inventory(&content_dir)?;
         let issues = verify_candidate(kind, manifest, &install_dir, &content_dir, &bad_required)?;
@@ -310,6 +417,9 @@ fn prepare_at(
         manifest: manifest.clone(),
         inventory: inventory.clone(),
         obsolete_paths: obsolete_paths.clone(),
+        selection_before: None,
+        selection_after: None,
+        file_only_removals: Vec::new(),
     };
     if remember_plan && !nothing_to_do {
         transaction_plans()
@@ -324,6 +434,7 @@ fn prepare_at(
     Ok(TransactionPreview {
         preview_id,
         profile_id: profile.id.clone(),
+        optional_selection: None,
         kind,
         version: manifest.modpack_version.clone(),
         source,
@@ -728,6 +839,13 @@ where
 
 fn verify_plan(plan: &TransactionPlan) -> Result<(), String> {
     reject_root_link(&plan.install_dir)?;
+    for path in &plan.file_only_removals {
+        if guarded_join(&plan.install_dir, path)?.is_dir() {
+            return Err(format!(
+                "An optional file became a directory after review and was left untouched: {path}"
+            ));
+        }
+    }
     let current = inventory(&plan.content_dir)?;
     if current.len() != plan.inventory.len()
         || current.iter().zip(&plan.inventory).any(|(left, right)| {
@@ -873,6 +991,11 @@ fn remove_obsolete(plan: &TransactionPlan, removed: &mut Vec<String>) -> Result<
             fs::remove_file(&target)
                 .map_err(|error| format!("Could not remove obsolete {relative}: {error}"))?;
         } else if target.is_dir() {
+            if plan.file_only_removals.contains(relative) {
+                return Err(format!(
+                    "Optional file became a directory and was left untouched: {relative}"
+                ));
+            }
             fs::remove_dir_all(&target)
                 .map_err(|error| format!("Could not remove obsolete {relative}: {error}"))?;
         } else {
@@ -1292,6 +1415,228 @@ mod tests {
                 .unwrap()
                 .trim(),
             "2.0.0"
+        );
+    }
+
+    fn with_extras() -> Manifest {
+        let mut pack = manifest(vec![("core.jar", b"core")]);
+        pack.optional_files =
+            manifest(vec![("on.jar", b"enabled"), ("off.jar", b"disabled")]).files;
+        for file in &mut pack.optional_files {
+            file.required = false;
+        }
+        pack
+    }
+
+    #[test]
+    fn update_whitelists_manifest_files_and_preserves_unselected_extras_and_saves() {
+        let root = TempDir::new().unwrap();
+        let install = root.path().join("install");
+        fs::create_dir(&install).unwrap();
+        fs::write(install.join("save.dat"), b"keep").unwrap();
+        let package = root.path().join("package.zip");
+        write_zip(
+            &package,
+            &[
+                ("core.jar", b"core"),
+                ("on.jar", b"enabled"),
+                ("off.jar", b"disabled"),
+                ("untracked.jar", b"do not install"),
+            ],
+        );
+        let profile = profile(&install, &package);
+        let manifest = with_extras();
+        let selected =
+            optional_extras::resolve(&profile, &manifest, None, Some(&["on.jar".into()])).unwrap();
+        let preview = prepare_selected_at(
+            &profile,
+            &manifest,
+            TransactionKind::Update,
+            &root.path().join("data"),
+            true,
+            Some(&selected),
+            None,
+        )
+        .unwrap();
+        assert_eq!(preview.staged_files, 2);
+        let plan = transaction_plans()
+            .lock()
+            .unwrap()
+            .remove(&preview.preview_id)
+            .unwrap();
+        let result = execute_plan(&plan, None, || Ok(())).unwrap();
+        assert!(result.success, "{result:?}");
+        assert!(install.join("on.jar").is_file());
+        assert!(!install.join("off.jar").exists());
+        assert!(!install.join("untracked.jar").exists());
+        assert_eq!(fs::read(install.join("save.dat")).unwrap(), b"keep");
+        fs::remove_file(install.join("on.jar")).unwrap();
+        let persisted =
+            optional_extras::resolve(&profile, &manifest, Some(&selected), None).unwrap();
+        let repair = prepare_selected_at(
+            &profile,
+            &manifest,
+            TransactionKind::Repair,
+            &root.path().join("data"),
+            true,
+            Some(&persisted),
+            None,
+        )
+        .unwrap();
+        assert_eq!(repair.staged_files, 1);
+        let plan = transaction_plans()
+            .lock()
+            .unwrap()
+            .remove(&repair.preview_id)
+            .unwrap();
+        assert!(execute_plan(&plan, None, || Ok(())).unwrap().success);
+        assert_eq!(fs::read(install.join("on.jar")).unwrap(), b"enabled");
+    }
+
+    #[test]
+    fn disabling_extras_is_reviewed_backed_up_and_rolled_back_if_configuration_commit_fails() {
+        let root = TempDir::new().unwrap();
+        let install = root.path().join("install");
+        fs::create_dir(&install).unwrap();
+        fs::write(install.join("core.jar"), b"core").unwrap();
+        fs::write(install.join("on.jar"), b"my modified extra").unwrap();
+        fs::write(install.join("modpack_version.txt"), b"2.0.0\n").unwrap();
+        let profile = profile(&install, &root.path().join("no-package-needed.zip"));
+        let manifest = with_extras();
+        let data = root.path().join("data");
+        let review = prepare_selected_at(
+            &profile,
+            &manifest,
+            TransactionKind::Repair,
+            &data,
+            true,
+            None,
+            Some(&[]),
+        )
+        .unwrap();
+        assert_eq!(review.staged_files, 0);
+        assert_eq!(review.obsolete_paths, 1);
+        assert!(
+            install.join("on.jar").exists(),
+            "Preparation must not disable live files"
+        );
+        let plan = transaction_plans()
+            .lock()
+            .unwrap()
+            .remove(&review.preview_id)
+            .unwrap();
+        let failed =
+            execute_plan(&plan, None, || Err("configuration commit failed".into())).unwrap();
+        assert!(!failed.success);
+        assert!(failed.rolled_back, "{failed:?}");
+        assert_eq!(
+            fs::read(install.join("on.jar")).unwrap(),
+            b"my modified extra"
+        );
+        let review = prepare_selected_at(
+            &profile,
+            &manifest,
+            TransactionKind::Repair,
+            &data,
+            true,
+            None,
+            Some(&[]),
+        )
+        .unwrap();
+        let plan = transaction_plans()
+            .lock()
+            .unwrap()
+            .remove(&review.preview_id)
+            .unwrap();
+        let done = execute_plan(&plan, None, || Ok(())).unwrap();
+        assert!(done.success, "{done:?}");
+        assert!(!install.join("on.jar").exists());
+        assert!(Path::new(&done.backup_path).is_file());
+    }
+
+    #[test]
+    fn optional_file_replaced_with_directory_after_preview_is_never_recursively_deleted() {
+        let root = TempDir::new().unwrap();
+        let install = root.path().join("install");
+        fs::create_dir(&install).unwrap();
+        fs::write(install.join("core.jar"), b"core").unwrap();
+        fs::write(install.join("on.jar"), b"extra").unwrap();
+        let profile = profile(&install, &root.path().join("unused.zip"));
+        let review = prepare_selected_at(
+            &profile,
+            &with_extras(),
+            TransactionKind::Repair,
+            &root.path().join("data"),
+            true,
+            None,
+            Some(&[]),
+        )
+        .unwrap();
+        fs::remove_file(install.join("on.jar")).unwrap();
+        fs::create_dir(install.join("on.jar")).unwrap();
+        fs::write(install.join("on.jar/important.txt"), b"preserve").unwrap();
+        let plan = transaction_plans()
+            .lock()
+            .unwrap()
+            .remove(&review.preview_id)
+            .unwrap();
+        let result = execute_plan(&plan, None, || Ok(())).unwrap();
+        assert!(!result.success);
+        assert!(result.error.contains("directory"));
+        assert_eq!(
+            fs::read(install.join("on.jar/important.txt")).unwrap(),
+            b"preserve"
+        );
+    }
+
+    #[test]
+    fn optional_choices_commit_with_version_and_reject_stale_configuration() {
+        let root = TempDir::new().unwrap();
+        let install = root.path().join("install");
+        fs::create_dir(&install).unwrap();
+        fs::write(install.join("core.jar"), b"core").unwrap();
+        let profile = profile(&install, &root.path().join("unused.zip"));
+        let data = root.path().join("data");
+        storage::update_at(&data, |config| {
+            config.profiles = vec![profile.clone()];
+            config.selected_profile_id = profile.id.clone();
+            Ok(())
+        })
+        .unwrap();
+        let review = prepare_selected_at(
+            &profile,
+            &with_extras(),
+            TransactionKind::Repair,
+            &data,
+            true,
+            None,
+            Some(&[]),
+        )
+        .unwrap();
+        let plan = transaction_plans()
+            .lock()
+            .unwrap()
+            .remove(&review.preview_id)
+            .unwrap();
+        let result = execute_plan(&plan, None, || {
+            storage::update_at(&data, |config| finalize_configuration(config, &plan))
+        })
+        .unwrap();
+        assert!(result.success, "{result:?}");
+        let mut saved = storage::load_or_create_at(&data).unwrap();
+        assert_eq!(saved.profiles[0].local_modpack_version, "2.0.0");
+        assert_eq!(
+            saved.optional_selections.get("fixture"),
+            plan.selection_after.as_ref()
+        );
+        assert!(
+            finalize_configuration(&mut saved, &plan)
+                .unwrap_err()
+                .contains("choices changed")
+        );
+        assert!(
+            !install.join("optional-selections.json").exists(),
+            "Preferences belong outside the live game folder"
         );
     }
 

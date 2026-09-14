@@ -25,6 +25,7 @@ import type {
   ModpackPublicationOutcome,
   PackagePreview,
   PackageRequest,
+  OptionalExtrasStatus,
   PublishingChoices,
   PublisherStatus,
   RepositoryCreation,
@@ -46,6 +47,11 @@ import type {
 } from "./types";
 
 const runningInTauri = isTauri();
+
+export async function getOptionalExtras(profileId: string): Promise<OptionalExtrasStatus> {
+  requireNative("Optional mod management");
+  return invoke<OptionalExtrasStatus>("get_optional_extras", { profileId });
+}
 
 export async function chooseLocalPath(kind: "folder" | "executable"): Promise<string | null> {
   requireNative("Local path selection");

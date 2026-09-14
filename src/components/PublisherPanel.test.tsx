@@ -43,12 +43,13 @@ describe("Per-release publishing choices", () => {
     fireEvent.click(screen.getByRole("button", { name: "Browse for modpack source folder" }));
     await waitFor(() => expect(screen.getByLabelText("Modpack source folder")).toHaveValue("E:\\Balance\\Mods"));
     fireEvent.change(screen.getByLabelText("Game version for this release"), { target: { value: "3.2" } });
+    fireEvent.change(screen.getByLabelText("Optional files or folders"), { target: { value: "BonusMod\n  OptionalAudio  " } });
     fireEvent.click(screen.getByRole("button", { name: "Save publishing choices locally" }));
     await waitFor(() => expect(savePublishingChoices).toHaveBeenCalledWith(expect.objectContaining({ gameVersion: "3.2", sourceDir: "E:\\Balance\\Mods" })));
     await waitFor(() => expect(screen.getByRole("button", { name: "Prepare release locally" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Prepare release locally" }));
     expect(await screen.findByRole("heading", { name: "Release preview ready" })).toBeInTheDocument();
-    expect(prepareModpackRelease).toHaveBeenCalledWith(expect.objectContaining({ gameVersion: "3.2", sourceDir: "E:\\Balance\\Mods", version: "2.0.0" }));
+    expect(prepareModpackRelease).toHaveBeenCalledWith(expect.objectContaining({ gameVersion: "3.2", sourceDir: "E:\\Balance\\Mods", version: "2.0.0", optionalPaths: ["BonusMod", "OptionalAudio"] }));
     expect(screen.getByRole("button", { name: "Publish GitHub release" })).toBeDisabled();
     expect(publishModpackRelease).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText("Game version for this release"), { target: { value: "3.3" } });

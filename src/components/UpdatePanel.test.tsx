@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { ComponentProps } from "react";
 import { UpdatePanel } from "./UpdatePanel";
@@ -8,6 +8,7 @@ import type { RestorePointSummary, TransactionPreview } from "../types";
 const api = vi.hoisted(() => ({
   listRestorePoints: vi.fn(), prepareModpackTransaction: vi.fn(), applyModpackTransaction: vi.fn(),
   applyRestorePoint: vi.fn(), deleteRestorePoint: vi.fn(), prepareRestorePoint: vi.fn(),
+  getOptionalExtras: vi.fn(),
 }));
 vi.mock("../api", () => api);
 
@@ -30,6 +31,37 @@ beforeEach(() => {
   api.prepareModpackTransaction.mockResolvedValue(preview);
   api.applyModpackTransaction.mockImplementation(() => new Promise(() => {}));
   api.applyRestorePoint.mockImplementation(() => new Promise(() => {}));
+  api.getOptionalExtras.mockResolvedValue({ profileId: first.id, version: "1.0.1", files: [
+    { path: "mods/voice.jar", category: "mods", bytes: 100, enabled: true, installed: true, current: true },
+    { path: "mods/visual.jar", category: "mods", bytes: 200, enabled: false, installed: false, current: false },
+  ] });
+});
+
+it("reviews explicit optional choices and invalidates the review when a selection changes", async () => {
+  api.prepareModpackTransaction.mockResolvedValue({ ...preview, kind: "repair", optionalSelection: ["mods/visual.jar"] });
+  render(<UpdatePanel {...props} manifest={{ ...props.manifest, optionalFileCount: 2 }} />);
+  const voice = await screen.findByRole("checkbox", { name: /mods\/voice.jar/ });
+  const visual = screen.getByRole("checkbox", { name: /mods\/visual.jar/ });
+  expect(voice).toBeChecked(); expect(visual).not.toBeChecked();
+  fireEvent.click(voice); fireEvent.click(visual);
+  expect(api.prepareModpackTransaction).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Review optional mod changes" }));
+  await screen.findByRole("button", { name: /apply verified repair/i });
+  expect(api.prepareModpackTransaction).toHaveBeenCalledWith({ profileId: first.id, kind: "repair", optionalFiles: ["mods/visual.jar"] });
+  expect(api.applyModpackTransaction).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("checkbox", { name: /I confirm that the launcher may back up/i }));
+  fireEvent.click(voice);
+  expect(screen.queryByRole("button", { name: /apply verified repair/i })).not.toBeInTheDocument();
+});
+
+it("does not apply optional choices from an old profile response", async () => {
+  let resolve!: (value: unknown) => void;
+  api.getOptionalExtras.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
+  const view = render(<UpdatePanel {...props} manifest={{ ...props.manifest, optionalFileCount: 1 }} />);
+  view.rerender(<UpdatePanel {...props} profile={second} manifest={{ ...props.manifest, optionalFileCount: 0 }} />);
+  await act(async () => resolve({ profileId: first.id, version: "1.0.1", files: [{ path: "late-extra.jar", enabled: true, installed: true, current: true, bytes: 1, category: "mods" }] }));
+  expect(screen.queryByText("late-extra.jar")).not.toBeInTheDocument();
+  await waitFor(() => expect(api.listRestorePoints).toHaveBeenCalledWith(second.id));
 });
 
 it("invalidates confirmation when switching profile or installation folder", async () => {

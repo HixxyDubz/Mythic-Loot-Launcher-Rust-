@@ -31,6 +31,7 @@ export interface GameProfile {
 export interface LauncherConfig {
   schemaVersion: number;
   selectedProfileId: string;
+  optionalSelections?: Record<string, { installDir: string; enabled: string[] }>;
   profiles: GameProfile[];
   preferences: {
     reduceMotion: boolean;
@@ -373,6 +374,7 @@ export interface PackageRequest {
   version: string;
   gameVersion: string;
   minecraftModLoader: string;
+  optionalPaths?: string[] | null;
   releaseDate: string;
   repository: string;
   releaseNotes: string;
@@ -468,6 +470,13 @@ export type TransactionKind = "update" | "repair";
 export interface TransactionRequest {
   profileId: string;
   kind: TransactionKind;
+  optionalFiles?: string[];
+}
+
+export interface OptionalExtrasStatus {
+  profileId: string;
+  version: string;
+  files: { path: string; category: string; bytes: number; enabled: boolean; installed: boolean; current: boolean }[];
 }
 
 export interface TransactionPreview {
@@ -485,6 +494,7 @@ export interface TransactionPreview {
   ready: boolean;
   nothingToDo: boolean;
   message: string;
+  optionalSelection?: string[] | null;
 }
 
 export interface TransactionOutcome {

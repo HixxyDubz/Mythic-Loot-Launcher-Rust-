@@ -54,6 +54,15 @@ pub struct LauncherConfig {
     pub selected_profile_id: String,
     pub profiles: Vec<GameProfile>,
     pub preferences: LauncherPreferences,
+    #[serde(default)]
+    pub optional_selections: std::collections::HashMap<String, OptionalSelection>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct OptionalSelection {
+    pub install_dir: String,
+    pub enabled: Vec<String>,
 }
 
 impl Default for LauncherConfig {
@@ -63,6 +72,7 @@ impl Default for LauncherConfig {
             selected_profile_id: "minecraft_main".into(),
             profiles: vec![minecraft_profile(), seven_days_profile()],
             preferences: LauncherPreferences::default(),
+            optional_selections: std::collections::HashMap::new(),
         }
     }
 }

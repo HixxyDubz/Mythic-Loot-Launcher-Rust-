@@ -55,10 +55,20 @@ pub fn load_publishing_choices(
         .iter()
         .find(|p| p.id == profile_id)
         .ok_or("That modpack profile does not exist")?;
-    if let Some(saved) = read(&storage::data_dir(&app)?, &profile_id)? {
+    let loaded = crate::content_editor::load_authoring(&app, profile);
+    if let Some(mut saved) = read(&storage::data_dir(&app)?, &profile_id)? {
+        if saved.request.optional_paths.is_none() {
+            saved.request.optional_paths = Some(
+                loaded
+                    .manifest
+                    .optional_files
+                    .iter()
+                    .map(|f| f.path.clone())
+                    .collect(),
+            );
+        }
         return Ok(saved);
     }
-    let loaded = crate::content_editor::load_authoring(&app, profile);
     let repository = profile
         .manifest_url
         .strip_prefix("https://github.com/")
@@ -78,6 +88,14 @@ pub fn load_publishing_choices(
                 .unwrap_or_default()
                 .into(),
             release_date: time::OffsetDateTime::now_utc().date().to_string(),
+            optional_paths: Some(
+                loaded
+                    .manifest
+                    .optional_files
+                    .iter()
+                    .map(|f| f.path.clone())
+                    .collect(),
+            ),
             repository,
             release_notes: format!("Release {}", profile.required_modpack_version),
         },
@@ -129,6 +147,9 @@ fn save_at(
         game_versions,
     };
     let bytes = serde_json::to_vec_pretty(&choices).map_err(|error| error.to_string())?;
+    if bytes.len() > 128 * 1024 {
+        return Err("Publishing choices exceed the local size limit; select optional folders instead of individual files".into());
+    }
     remote::write_atomic(&path(root, &profile.id)?, &bytes)?;
     Ok(choices)
 }
@@ -146,6 +167,7 @@ mod tests {
             version: "2.0".into(),
             game_version: "3.1 (b8)".into(),
             minecraft_mod_loader: String::new(),
+            optional_paths: None,
             release_date: "2026-09-10".into(),
             repository: "owner/pack".into(),
             release_notes: "Balance changes".into(),

@@ -18,6 +18,7 @@ import {
   applyRestorePoint,
   deleteRestorePoint,
   listRestorePoints,
+  getOptionalExtras,
   prepareModpackTransaction,
   prepareRestorePoint,
 } from "../api";
@@ -31,6 +32,7 @@ import type {
   TransactionKind,
   TransactionOutcome,
   TransactionPreview,
+  OptionalExtrasStatus,
 } from "../types";
 
 interface UpdatePanelProps {
@@ -44,7 +46,7 @@ interface UpdatePanelProps {
 }
 
 export function UpdatePanel(props: UpdatePanelProps) {
-  return <UpdateSession key={`${props.profile.id}|${props.profile.installDir}`} {...props} />;
+  return <UpdateSession key={`${props.profile.id}|${props.profile.installDir}|${props.manifest.modpackVersion}|${props.manifest.optionalFileCount}`} {...props} />;
 }
 
 function UpdateSession({
@@ -69,7 +71,12 @@ function UpdateSession({
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
   const [restoreBusy, setRestoreBusy] = useState(false);
-  const working = busy || restoreBusy;
+  const [extrasBusy, setExtrasBusy] = useState(false);
+  const [extras, setExtras] = useState<OptionalExtrasStatus | null>(null);
+  const [extrasError, setExtrasError] = useState("");
+  const [selectedExtras, setSelectedExtras] = useState<string[]>([]);
+  const [extrasDirty, setExtrasDirty] = useState(false);
+  const working = busy || restoreBusy || extrasBusy;
   useEffect(() => {
     onBusyChange?.(working);
     return () => onBusyChange?.(false);
@@ -80,7 +87,27 @@ function UpdateSession({
     setRestoreOutcome(null);
     setDeleteTarget(null);
     void loadRestorePoints();
+    void loadExtras();
   }, [profile.id]);
+
+  async function loadExtras() {
+    if (!manifest.optionalFileCount || !profile.installDir) return;
+    const current = scope();
+    setExtrasBusy(true); setExtrasError("");
+    try {
+      const result = await getOptionalExtras(profile.id);
+      if (!current()) return;
+      if (result.profileId !== profile.id) throw new Error("Optional files belong to a different modpack. Reload this view.");
+      setExtras(result); setSelectedExtras(result.files.filter((file) => file.enabled).map((file) => file.path)); setExtrasDirty(false);
+    } catch (error) { if (current()) setExtrasError(errorMessage(error)); }
+    finally { if (current()) setExtrasBusy(false); }
+  }
+
+  function chooseExtra(path: string, enabled: boolean) {
+    setSelectedExtras((previous) => enabled ? [...previous, path] : previous.filter((item) => item !== path));
+    setExtrasDirty(true); setPreview(null); setConfirmed(false); setOutcome(null);
+    setRestorePreview(null); setRestoreConfirmed(false);
+  }
 
   async function loadRestorePoints() {
     const current = scope();
@@ -92,7 +119,7 @@ function UpdateSession({
     }
   }
 
-  async function prepare(kind: TransactionKind) {
+  async function prepare(kind: TransactionKind, explicitExtras = false) {
     if (working) return;
     const current = scope();
     setBusy(true);
@@ -101,7 +128,9 @@ function UpdateSession({
     setConfirmed(false);
     setOutcome(null);
     try {
-      const result = await prepareModpackTransaction({ profileId: profile.id, kind });
+      const result = await prepareModpackTransaction({ profileId: profile.id, kind,
+        ...((extrasDirty || explicitExtras) && extras ? { optionalFiles: selectedExtras } : {}),
+      });
       if (!current()) return;
       if (result.profileId !== profile.id) throw new Error("The candidate belongs to a different modpack. Prepare it again.");
       setPreview(result);
@@ -122,12 +151,14 @@ function UpdateSession({
       const result = await applyModpackTransaction(preview.previewId, confirmed, profile.id);
       if (!current()) return;
       setOutcome(result);
+      setPreview(null);
       setConfirmed(false);
       onNotice(result.message);
       if (result.success) {
         await onCompleted();
         if (!current()) return;
         await loadRestorePoints();
+        await loadExtras();
       }
     } catch (error) {
       if (current()) onNotice(errorMessage(error));
@@ -172,6 +203,7 @@ function UpdateSession({
         await onCompleted();
         if (!current()) return;
         await loadRestorePoints();
+        await loadExtras();
       }
     } catch (error) {
       if (current()) onNotice(errorMessage(error));
@@ -239,6 +271,19 @@ function UpdateSession({
           </article>
         </section>
 
+        {manifest.optionalFileCount > 0 && <section className="settings-section panel-card">
+          <div className="section-title"><Wrench /><div><h2>Optional mods and extras</h2><p>Choose the files to keep enabled. Nothing changes until you prepare, review and apply. Disabling files creates a recoverable backup; required files are repaired if needed.</p></div></div>
+          {extrasBusy && <p role="status">Checking installed optional files…</p>}
+          {extrasError && <p role="alert">{extrasError}</p>}
+          {!profile.installDir && <p>Choose the modpack folder in Settings first.</p>}
+          {extras?.files.map((file) => <label className="confirmation-row" key={file.path}>
+            <input type="checkbox" checked={selectedExtras.includes(file.path)} disabled={working} onChange={(event) => chooseExtra(file.path, event.target.checked)} />
+            <span>{file.path}<small> · {formatBytes(file.bytes)} · {file.current ? "Installed and current" : file.installed ? "Installed; update available or modified" : "Not installed"}</small></span>
+          </label>)}
+          <button className="secondary-action" disabled={working || !configured || !extras || Boolean(extrasError)} onClick={() => void prepare("repair", true)}>Review optional mod changes</button>
+          {extrasError && <button className="secondary-action" disabled={working} onClick={() => void loadExtras()}>Retry optional file check</button>}
+        </section>}
+
         {!configured && (
           <section className="settings-section panel-card transaction-warning">
             <ShieldAlert /><div><h2>Setup is required first</h2><p>Choose an existing modpack folder and load a valid trusted manifest before preparing maintenance.</p></div>
@@ -256,6 +301,7 @@ function UpdateSession({
               <div><dt>Existing files backed up</dt><dd>{preview.existingFilesToBackup.toLocaleString()}</dd></div>
               <div><dt>New files journaled</dt><dd>{preview.newFiles.toLocaleString()}</dd></div>
               <div><dt>Obsolete live paths</dt><dd>{preview.obsoletePaths.toLocaleString()}</dd></div>
+              {preview.optionalSelection && <div><dt>Optional files enabled after apply</dt><dd>{preview.optionalSelection.length ? preview.optionalSelection.join(", ") : "None"}</dd></div>}
               {preview.source && <div><dt>Trusted package</dt><dd title={preview.source}>{preview.source}</dd></div>}
             </dl>
             {preview.ready && (
