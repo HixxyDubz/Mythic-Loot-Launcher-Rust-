@@ -39,6 +39,43 @@ button { color: inherit; }
     var(--bg);
 }
 
+.app-shell[data-font="verdana"] { font-family: Verdana, Geneva, sans-serif; }
+.app-shell[data-theme="slate"] {
+  --bg: #0a1019;
+  --sidebar: #0e1724;
+  --panel: rgba(22, 34, 50, .94);
+  --panel-strong: #1b2a3e;
+  --panel-hover: #25384e;
+  --line: rgba(155, 190, 220, .2);
+  --line-strong: rgba(155, 190, 220, .4);
+  --purple: #83b2ee;
+  --purple-bright: #b8d6ff;
+  --muted: #adbdcf;
+  background: radial-gradient(circle at 77% 2%, rgba(72, 112, 154, .24), transparent 40%), var(--bg);
+}
+.app-shell[data-theme="slate"] .sidebar { background: var(--sidebar); }
+.app-shell[data-theme="slate"] .profile-button.selected { background: #24364c; border-color: #526c90; }
+.app-shell[data-theme="slate"] .titlebar { background: #090e16; }
+.app-shell[data-decorative-background="false"] { background: var(--bg); }
+.app-shell[data-decorative-background="false"] .hero-art,
+.app-shell[data-decorative-background="false"] .hero-glow,
+.app-shell[data-decorative-background="false"] .hero-card::before { display: none; }
+.app-shell[data-decorative-background="false"] .hero-card { background: var(--panel); }
+.app-shell[data-reduce-motion="true"] *,
+.app-shell[data-reduce-motion="true"] *::before,
+.app-shell[data-reduce-motion="true"] *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+.preferences-section fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.preference-toggle { display: flex; align-items: flex-start; gap: 10px; margin: 18px 0; font-size: 13px; }
+.preference-toggle input { margin-top: 3px; accent-color: var(--purple); }
+.preference-toggle small { display: block; color: var(--muted); font-size: 11px; line-height: 1.6; margin-top: 4px; }
+.runtime-results { margin: 16px 0; font-size: 12px; color: var(--muted); line-height: 1.6; }
+.runtime-result { display: grid; gap: 8px; margin: 10px 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
+.runtime-result strong { color: var(--text); }
+.runtime-result input { width: 100%; min-width: 0; padding: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+
 .titlebar {
   height: 39px;
   display: flex;

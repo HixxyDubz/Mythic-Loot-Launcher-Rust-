@@ -1,4 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type {
   ActivityItem,
   AppReleasePreview,
@@ -18,6 +19,8 @@ import type {
   FileVerification,
   GameProfile,
   LaunchOutcome,
+  LauncherPreferences,
+  JavaDiscovery,
   ManifestContentInput,
   ManifestContentSaveOutcome,
   MinecraftBootstrapArtifact,
@@ -77,6 +80,21 @@ function requireNative(operation: string): void {
 export async function bootstrap(): Promise<BootstrapPayload> {
   requireNative("Launcher startup");
   return invoke<BootstrapPayload>("bootstrap");
+}
+
+export async function savePreferences(preferences: LauncherPreferences): Promise<LauncherPreferences> {
+  requireNative("Launcher preferences");
+  return invoke<LauncherPreferences>("save_preferences", { preferences });
+}
+
+export async function detectJavaRuntimes(): Promise<JavaDiscovery> {
+  requireNative("Java discovery");
+  return invoke<JavaDiscovery>("detect_java_runtimes");
+}
+
+export async function prepareJavaArguments(profile: GameProfile, memoryMb: number | null): Promise<string> {
+  requireNative("Java memory settings");
+  return invoke<string>("prepare_java_arguments", { profile, memoryMb });
 }
 
 export async function listActivity(): Promise<ActivityItem[]> {
@@ -206,7 +224,14 @@ export async function verifyProfileFiles(profileId: string): Promise<FileVerific
 
 export async function launchProfile(profileId: string): Promise<LaunchOutcome> {
   requireNative("Game launch");
-  return invoke<LaunchOutcome>("launch_profile", { profileId });
+  const outcome = await invoke<LaunchOutcome>("launch_profile", { profileId });
+  // Only normal, successful launches request a close. Safe Launch uses a
+  // different command and must keep its recovery monitor alive.
+  if (outcome.closeAfterLaunch) {
+    try { await getCurrentWindow().close(); }
+    catch { outcome.message += ". The launcher could not close automatically; you can close it manually when work finishes."; }
+  }
+  return outcome;
 }
 
 export async function githubPublisherStatus(): Promise<PublisherStatus> {

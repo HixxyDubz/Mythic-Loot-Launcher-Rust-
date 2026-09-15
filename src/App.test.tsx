@@ -1,9 +1,9 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { detectedModpackBase, isMinecraftSyncTarget, SettingsPanel } from "./components/SettingsPanel";
 import { normalizeId } from "./components/ModpackManagerPanel";
-import { refreshPublicCatalog } from "./api";
+import { bootstrap, checkAppUpdate, refreshPublicCatalog, savePreferences } from "./api";
 import { testBootstrapPayload, testProfiles } from "./test/fixtures";
 
 vi.mock("./api", async (importOriginal) => {
@@ -12,6 +12,8 @@ vi.mock("./api", async (importOriginal) => {
   return {
     ...actual,
     bootstrap: vi.fn(async () => testBootstrapPayload()),
+    savePreferences: vi.fn(async (preferences) => preferences),
+    checkAppUpdate: vi.fn(async () => { throw new Error("Offline test"); }),
     refreshPublicCatalog: vi.fn(async () => ({
       payload: testBootstrapPayload(),
       summary: {
@@ -76,7 +78,57 @@ vi.mock("./api", async (importOriginal) => {
   };
 });
 
+beforeEach(() => vi.clearAllMocks());
+
 describe("Mythic Loot launcher shell", () => {
+  it("respects disabled startup checks while retaining explicit catalogue refresh", async () => {
+    const initial = testBootstrapPayload();
+    initial.config.preferences.autoCheckUpdates = false;
+    vi.mocked(bootstrap).mockResolvedValueOnce(initial);
+    render(<App />);
+    await screen.findByRole("heading", { name: "Mythic Loot Minecraft" });
+    expect(refreshPublicCatalog).not.toHaveBeenCalled();
+    expect(checkAppUpdate).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /complete setup/i }));
+    fireEvent.click(screen.getByRole("button", { name: /refresh catalogue now/i }));
+    await waitFor(() => expect(refreshPublicCatalog).toHaveBeenCalledOnce());
+  });
+
+  it("does not replace an unsaved settings draft with a late startup refresh", async () => {
+    let finish!: (value: Awaited<ReturnType<typeof refreshPublicCatalog>>) => void;
+    vi.mocked(refreshPublicCatalog).mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: /complete setup/i }));
+    fireEvent.change(screen.getByLabelText("Game or launcher executable"), { target: { value: "C:\\New\\Game.exe" } });
+    await act(async () => finish({ payload: testBootstrapPayload(), summary: { catalogChanged: false, manifestsChanged: 0, manifestsChecked: 2, online: true, message: "Checked" } }));
+    expect(screen.getByLabelText("Game or launcher executable")).toHaveValue("C:\\New\\Game.exe");
+  });
+
+  it("applies saved appearance and reduced motion to the actual shell", async () => {
+    const view = render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: /complete setup/i }));
+    fireEvent.change(screen.getByLabelText("Colour theme"), { target: { value: "slate" } });
+    fireEvent.change(screen.getByLabelText("Interface font"), { target: { value: "verdana" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /reduce motion/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /show decorative background/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save launcher preferences/i }));
+    await waitFor(() => expect(view.container.querySelector(".app-shell")).toHaveAttribute("data-theme", "slate"));
+    expect(view.container.querySelector(".app-shell")).toHaveAttribute("data-font", "verdana");
+    expect(view.container.querySelector(".app-shell")).toHaveAttribute("data-reduce-motion", "true");
+    expect(view.container.querySelector(".app-shell")).toHaveAttribute("data-decorative-background", "false");
+    expect(savePreferences).toHaveBeenCalledOnce();
+  });
+
+  it("preserves edited local paths and preferences during an explicit catalogue refresh", async () => {
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: /complete setup/i }));
+    fireEvent.change(screen.getByLabelText("Game or launcher executable"), { target: { value: "C:\\Pending\\Game.exe" } });
+    fireEvent.change(screen.getByLabelText("Colour theme"), { target: { value: "slate" } });
+    fireEvent.click(screen.getByRole("button", { name: /refresh catalogue now/i }));
+    await screen.findByText("Using verified local data.");
+    expect(screen.getByLabelText("Game or launcher executable")).toHaveValue("C:\\Pending\\Game.exe");
+    expect(screen.getByLabelText("Colour theme")).toHaveValue("slate");
+  });
   it("keeps a detected game root separate from its managed modpack subfolder", () => {
     expect(detectedModpackBase("C:\\Games\\7 Days To Die", "Mods")).toBe("C:\\Games\\7 Days To Die\\Mods");
     expect(detectedModpackBase("C:\\Games\\Minecraft", "")).toBe("C:\\Games\\Minecraft");
@@ -97,6 +149,9 @@ describe("Mythic Loot launcher shell", () => {
     }));
     render(
       <SettingsPanel
+        preferences={testBootstrapPayload().config.preferences}
+        onSavePreferences={async () => undefined}
+        onRefreshCatalogue={() => undefined}
         profile={testProfiles[0]}
         games={testBootstrapPayload().games}
         dataDir="Test data directory"
@@ -133,6 +188,9 @@ describe("Mythic Loot launcher shell", () => {
     const onSave = vi.fn();
     render(
       <SettingsPanel
+        preferences={testBootstrapPayload().config.preferences}
+        onSavePreferences={async () => undefined}
+        onRefreshCatalogue={() => undefined}
         profile={testProfiles[1]}
         games={testBootstrapPayload().games}
         dataDir="Test data directory"

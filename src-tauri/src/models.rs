@@ -30,11 +30,30 @@ fn catalog_visible_by_default() -> bool {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[serde(default, rename_all = "camelCase")]
 pub struct LauncherPreferences {
     pub reduce_motion: bool,
     pub auto_check_updates: bool,
     pub close_after_launch: bool,
+    pub theme: LauncherTheme,
+    pub font: LauncherFont,
+    pub decorative_background: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum LauncherTheme {
+    #[default]
+    Amethyst,
+    Slate,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum LauncherFont {
+    #[default]
+    System,
+    Verdana,
 }
 
 impl Default for LauncherPreferences {
@@ -43,6 +62,9 @@ impl Default for LauncherPreferences {
             reduce_motion: false,
             auto_check_updates: true,
             close_after_launch: false,
+            theme: LauncherTheme::default(),
+            font: LauncherFont::default(),
+            decorative_background: true,
         }
     }
 }
@@ -200,4 +222,5 @@ pub struct BootstrapPayload {
 pub struct LaunchOutcome {
     pub pid: u32,
     pub message: String,
+    pub close_after_launch: bool,
 }

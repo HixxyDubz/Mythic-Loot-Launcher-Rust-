@@ -1,8 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Check, HardDrive, Radar, RefreshCw, Save, X } from "lucide-react";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { EditionProfileMetadataSection, launcherEdition } from "@launcher-edition";
 import { PathField } from "./PathField";
+import { PreferencesSection } from "./PreferencesSection";
+import { JavaRuntimeSection } from "./JavaRuntimeSection";
+import type { LauncherPreferences } from "../types";
 import type { DetectedInstall, GameDefinition, GameProfile, MinecraftBootstrapArtifact, MinecraftBootstrapRequest, MinecraftLauncher } from "../types";
 
 interface SettingsPanelProps {
@@ -16,6 +19,9 @@ interface SettingsPanelProps {
   onSave: (profile: GameProfile) => void;
   onPrepareMinecraftBootstrap: (request: MinecraftBootstrapRequest) => Promise<MinecraftBootstrapArtifact>;
   onNotice: (message: string) => void;
+  preferences: LauncherPreferences;
+  onSavePreferences: (preferences: LauncherPreferences) => Promise<void>;
+  onRefreshCatalogue: () => void;
 }
 
 export function SettingsPanel({
@@ -29,12 +35,20 @@ export function SettingsPanel({
   onSave,
   onPrepareMinecraftBootstrap,
   onNotice,
+  preferences,
+  onSavePreferences,
+  onRefreshCatalogue,
 }: SettingsPanelProps) {
   const [draft, setDraft] = useState(profile);
+  const previousProfile = useRef(profile);
   const [bootstrapArtifact, setBootstrapArtifact] = useState<MinecraftBootstrapArtifact | null>(null);
   const [preparingLauncher, setPreparingLauncher] = useState<MinecraftLauncher | null>(null);
   useEffect(() => {
-    setDraft(profile);
+    const previous = previousProfile.current;
+    previousProfile.current = profile;
+    // Explicit catalogue refresh may return fresh profile objects while the
+    // user is editing paths. Keep an edited draft; adopt refreshes when clean.
+    setDraft((current) => current === previous ? profile : current);
     setBootstrapArtifact(null);
   }, [profile]);
 
@@ -84,6 +98,7 @@ export function SettingsPanel({
       </div>
 
       <div className="settings-layout">
+        <PreferencesSection preferences={preferences} busy={busy} onSave={onSavePreferences} onRefreshCatalogue={onRefreshCatalogue} onNotice={onNotice} />
         <EditionProfileMetadataSection draft={draft} games={games} onUpdate={update} />
 
         <section className="settings-section panel-card">
@@ -162,6 +177,8 @@ export function SettingsPanel({
             <p className="detection-note">Run detection to search supported launcher and Steam locations. Manual paths always remain available.</p>
           )}
         </section>
+
+        {draft.game === "minecraft" && <JavaRuntimeSection profile={draft} busy={busy} onChange={setDraft} onNotice={onNotice} />}
 
         <section className="settings-section panel-card native-data-card">
           <div className="section-title"><HardDrive /><div><h2>Native data location</h2><p>{dataDir}</p></div></div>

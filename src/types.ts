@@ -28,22 +28,32 @@ export interface GameProfile {
   catalogVisible: boolean;
 }
 
+export interface LauncherPreferences {
+  reduceMotion: boolean;
+  autoCheckUpdates: boolean;
+  closeAfterLaunch: boolean;
+  theme: "amethyst" | "slate";
+  font: "system" | "verdana";
+  decorativeBackground: boolean;
+}
+
 export interface LauncherConfig {
   schemaVersion: number;
   selectedProfileId: string;
   optionalSelections?: Record<string, { installDir: string; enabled: string[] }>;
   profiles: GameProfile[];
-  preferences: {
-    reduceMotion: boolean;
-    autoCheckUpdates: boolean;
-    closeAfterLaunch: boolean;
-  };
+  preferences: LauncherPreferences;
 }
 
 export interface GameDefinition {
   id: string;
   displayName: string;
   detectionKind: string;
+}
+
+export interface JavaDiscovery {
+  runtimes: { executable: string; version: string; vendor: string; architecture: string; source: string }[];
+  limited: boolean;
 }
 
 export interface ProfileHealth {
@@ -346,6 +356,7 @@ export interface MinecraftBootstrapArtifact {
 export interface LaunchOutcome {
   pid: number;
   message: string;
+  closeAfterLaunch?: boolean;
 }
 
 export interface PublisherStatus {

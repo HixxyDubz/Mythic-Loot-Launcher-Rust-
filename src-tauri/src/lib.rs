@@ -10,6 +10,7 @@ mod content_editor;
 mod content_publisher;
 mod detection;
 mod download;
+mod java_runtime;
 mod launch;
 mod manifest;
 mod minecraft_setup;
@@ -19,6 +20,7 @@ mod optional_extras;
 #[cfg(feature = "developer")]
 mod packager;
 mod path_picker;
+mod preferences;
 #[cfg(feature = "developer")]
 mod publisher;
 #[cfg(feature = "developer")]
@@ -35,6 +37,7 @@ mod support;
 mod updater;
 
 use activity::{ActivityItem, ActivityKind};
+use java_runtime::{detect_java_runtimes, prepare_java_arguments};
 use manifest::FileVerification;
 use minecraft_setup::{MinecraftBootstrapArtifact, MinecraftBootstrapRequest};
 use models::{BootstrapPayload, DetectedInstall, GameProfile, LaunchOutcome, ReadinessStatus};
@@ -42,6 +45,7 @@ use optional_extras::get_optional_extras;
 #[cfg(feature = "developer")]
 use packager::{PackagePreview, PackageRequest, ReleasePublication};
 use path_picker::choose_local_path;
+use preferences::save_preferences;
 #[cfg(feature = "developer")]
 use publisher::{PublisherStatus, RepositoryCreation, RepositoryRequest};
 #[cfg(feature = "developer")]
@@ -1027,6 +1031,7 @@ fn launch_profile(app: AppHandle, profile_id: String) -> Result<LaunchOutcome, S
             let _operation = operations::MaintenanceGuard::acquire()?;
             let config = storage::load_or_create(&app)?;
             updater::require_profile_match(&profile_id, &profile_id, &config.selected_profile_id)?;
+            optional_extras::ensure_no_safe_session(&app, &profile_id)?;
             let profile = config
                 .profiles
                 .iter()
@@ -1040,7 +1045,7 @@ fn launch_profile(app: AppHandle, profile_id: String) -> Result<LaunchOutcome, S
                     profile.display_name, health.headline
                 ));
             }
-            launch::launch(profile)
+            launch::launch(profile, config.preferences.close_after_launch)
         },
         |outcome| (true, outcome.message.clone()),
     )
@@ -1074,6 +1079,9 @@ pub fn run() {
     #[cfg(feature = "developer")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         choose_local_path,
+        save_preferences,
+        detect_java_runtimes,
+        prepare_java_arguments,
         get_optional_extras,
         bootstrap,
         list_activity,
@@ -1120,6 +1128,9 @@ pub fn run() {
     #[cfg(not(feature = "developer"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         choose_local_path,
+        save_preferences,
+        detect_java_runtimes,
+        prepare_java_arguments,
         get_optional_extras,
         bootstrap,
         list_activity,

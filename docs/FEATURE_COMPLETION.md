@@ -11,8 +11,10 @@ Rust is the maintained application. Python is read-only behavioral reference, ne
 - [ ] Automatic discovery of Minecraft version/loader metadata from the chosen source, without copying launcher account state.
 - [x] Optional inventory publishing, Player extras management, update preservation and Safe Launch protection (0.1.10; controlled file-transaction tests, not gameplay acceptance).
 - [ ] Recover pre-0.1.9 content edits saved inside a downloaded manifest; explicit draft discard/recovery controls.
-- [ ] Java/runtime and memory controls, complete server-free game-folder adapters and local game-version checks.
-- [ ] User preferences: update-check behavior, close-after-launch, reduced motion, theme/font/background/window geometry, opt-in presence.
+- [x] Read-only Java discovery and advanced direct-Java memory argument controls (0.1.11); CurseForge/Modrinth own their runtime settings and have linked setup guidance, not hidden configuration writes.
+- [ ] Complete server-free game-folder adapters and local game-version checks; further third-party runtime automation would need reviewed integration.
+- [x] Startup update-check behavior, explicit catalogue refresh, close-after-normal-launch, reduced motion, colour theme, font and plain/decorative backgrounds (0.1.11).
+- [ ] Window geometry persistence, custom background selection and opt-in presence.
 - [ ] Crash/session tracking, automatic recovery prompts, log diagnosis and support export.
 - [ ] Native progress/cancellation and recoverable interrupted file transactions.
 - [ ] Re-run adversarial regressions, rebuild both editions, packaged acceptance, and push tested source.
@@ -39,3 +41,9 @@ See `RELEASE_SETUP_0.1.9.md` for testing and distribution boundaries. The remain
 `OPTIONAL_EXTRAS_0.1.10.md` records the next completed implementation slice. Developer can mark relative files/folders optional. Player can review enabling/disabling extras in Update & Repair. Selections are committed with the installed version in local configuration, scoped to the installation folder. Updates now extract only manifest-listed files and enabled extras, never every ZIP member indiscriminately. Safe Launch session recovery takes precedence over maintenance.
 
 This does not complete the unchecked runtime/preferences, crash/recovery, progress/cancellation or real external acceptance work above.
+
+## 0.1.11 checkpoint
+
+`PREFERENCES_RUNTIME_0.1.11.md` records the working preferences and runtime slice. Preferences persist locally with backwards-compatible defaults and apply to real behavior. Normal launches can request a guarded close after success; Safe Launch stays open. Java discovery reads local release metadata without executing found binaries. The advanced memory editor changes only JVM heap arguments before the Java entry point, requires a direct Java executable, and leaves the result in the settings draft for review/save. Minecraft launchers continue managing their own Java and memory settings.
+
+The remaining unchecked implementation and external-acceptance items still prevent a feature-complete claim. No public release/feed is created by building or pushing this checkpoint.

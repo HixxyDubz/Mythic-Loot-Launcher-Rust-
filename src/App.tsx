@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import "./App.css";
 import { EditionModpackManagerPanel, EditionPublisherPanel, launcherEdition, publisherAvailable } from "@launcher-edition";
-import { applyModpackTransaction, bootstrap, checkAppUpdate, detectInstallations, getAppUpdateResult, launchProfile, prepareMinecraftBootstrap, prepareModpackTransaction, refreshPublicCatalog, saveProfile, selectProfile, verifyProfileFiles } from "./api";
+import { applyModpackTransaction, bootstrap, checkAppUpdate, detectInstallations, getAppUpdateResult, launchProfile, prepareMinecraftBootstrap, prepareModpackTransaction, refreshPublicCatalog, savePreferences, saveProfile, selectProfile, verifyProfileFiles } from "./api";
 import { AppUpdatePanel } from "./components/AppUpdatePanel";
 import { Dashboard } from "./components/Dashboard";
 import { ActivityPanel } from "./components/ActivityPanel";
@@ -15,11 +15,13 @@ import { StoragePanel } from "./components/StoragePanel";
 import { SupportPanel } from "./components/SupportPanel";
 import { TitleBar } from "./components/TitleBar";
 import { UpdatePanel } from "./components/UpdatePanel";
-import type { BootstrapPayload, DetectedInstall, FileVerification, GameProfile } from "./types";
+import type { BootstrapPayload, DetectedInstall, FileVerification, GameProfile, LauncherPreferences } from "./types";
 
 function App() {
   const [payload, setPayload] = useState<BootstrapPayload | null>(null);
-  const [page, setPage] = useState<"dashboard" | "activity" | "storage" | "support" | "appUpdate" | "settings" | "modpacks" | "publisher" | "update" | "safeLaunch" | "smartLaunch">("dashboard");
+  const [page, updatePage] = useState<"dashboard" | "activity" | "storage" | "support" | "appUpdate" | "settings" | "modpacks" | "publisher" | "update" | "safeLaunch" | "smartLaunch">("dashboard");
+  const interacted = useRef(false);
+  function setPage(next: typeof page) { interacted.current = true; updatePage(next); }
   const [busy, setBusy] = useState(false);
   const [maintenanceBusy, setMaintenanceBusy] = useState(false);
   const [notice, setNotice] = useState("");
@@ -34,30 +36,55 @@ function App() {
   }, []);
 
   useEffect(() => {
+    let active = true;
     void bootstrap()
       .then((initial) => {
+        if (!active) return;
         setPayload(initial);
+        if (!initial.config.preferences.autoCheckUpdates) return;
         void refreshPublicCatalog()
           .then((result) => {
-            setPayload(result.payload);
+            if (!active) return;
+            // A late startup response must not replace a newer local edit,
+            // preference save or profile selection.
+            setPayload((current) => current === initial && !interacted.current ? result.payload : current);
             if (result.summary.catalogChanged || result.summary.manifestsChanged > 0) {
               setNotice(result.summary.message);
             }
           })
           .catch(() => undefined);
+        void checkAppUpdate()
+          .then((update) => {
+            if (active && update.canInstall) setNotice(update.message);
+          })
+          .catch(() => undefined);
       })
-      .catch((error) => setFatalError(errorMessage(error)));
-    void checkAppUpdate()
-      .then((update) => {
-        if (update.canInstall) setNotice(update.message);
-      })
-      .catch(() => undefined);
+      .catch((error) => { if (active) setFatalError(errorMessage(error)); });
     void getAppUpdateResult()
       .then((result) => {
-        if (result) setNotice(result.message);
+        if (active && result) setNotice(result.message);
       })
       .catch(() => undefined);
+    return () => { active = false; };
   }, []);
+
+  async function saveLauncherPreferences(preferences: LauncherPreferences) {
+    setBusy(true);
+    try {
+      const saved = await savePreferences(preferences);
+      setPayload((current) => current && ({ ...current, config: { ...current.config, preferences: saved } }));
+    } finally { setBusy(false); }
+  }
+
+  async function refreshCatalogue() {
+    setBusy(true);
+    try {
+      const result = await refreshPublicCatalog();
+      setPayload(result.payload);
+      setNotice(result.summary.message);
+    } catch (error) { setNotice(errorMessage(error)); }
+    finally { setBusy(false); }
+  }
 
   const selectedProfile = useMemo(
     () => payload?.config.profiles.find((profile) => profile.id === payload.config.selectedProfileId),
@@ -164,7 +191,12 @@ function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell"
+      data-theme={payload?.config.preferences.theme ?? "amethyst"}
+      data-font={payload?.config.preferences.font ?? "system"}
+      data-reduce-motion={payload?.config.preferences.reduceMotion ?? false}
+      data-decorative-background={payload?.config.preferences.decorativeBackground ?? true}
+    >
       <TitleBar />
       {fatalError ? (
         <div className="fatal-state">
@@ -256,6 +288,7 @@ function App() {
               />
             ) : page === "settings" ? (
               <SettingsPanel
+                key={selectedProfile.id}
                 profile={selectedProfile}
                 games={payload.games}
                 dataDir={payload.dataDir}
@@ -266,6 +299,9 @@ function App() {
                 onSave={(profile) => void save(profile)}
                 onPrepareMinecraftBootstrap={prepareMinecraftBootstrap}
                 onNotice={setNotice}
+                preferences={payload.config.preferences}
+                onSavePreferences={saveLauncherPreferences}
+                onRefreshCatalogue={() => void refreshCatalogue()}
               />
             ) : (
               <Dashboard
