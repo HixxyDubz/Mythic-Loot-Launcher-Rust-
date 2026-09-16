@@ -13,6 +13,7 @@ mod download;
 mod java_runtime;
 mod launch;
 mod manifest;
+mod minecraft_metadata;
 mod minecraft_setup;
 mod models;
 mod operations;
@@ -39,6 +40,7 @@ mod updater;
 use activity::{ActivityItem, ActivityKind};
 use java_runtime::{detect_java_runtimes, prepare_java_arguments};
 use manifest::FileVerification;
+use minecraft_metadata::inspect_minecraft_metadata;
 use minecraft_setup::{MinecraftBootstrapArtifact, MinecraftBootstrapRequest};
 use models::{BootstrapPayload, DetectedInstall, GameProfile, LaunchOutcome, ReadinessStatus};
 use optional_extras::get_optional_extras;
@@ -1081,6 +1083,7 @@ pub fn run() {
         choose_local_path,
         save_preferences,
         detect_java_runtimes,
+        inspect_minecraft_metadata,
         prepare_java_arguments,
         get_optional_extras,
         bootstrap,
@@ -1130,6 +1133,7 @@ pub fn run() {
         choose_local_path,
         save_preferences,
         detect_java_runtimes,
+        inspect_minecraft_metadata,
         prepare_java_arguments,
         get_optional_extras,
         bootstrap,

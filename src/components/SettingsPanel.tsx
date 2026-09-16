@@ -5,6 +5,7 @@ import { EditionProfileMetadataSection, launcherEdition } from "@launcher-editio
 import { PathField } from "./PathField";
 import { PreferencesSection } from "./PreferencesSection";
 import { JavaRuntimeSection } from "./JavaRuntimeSection";
+import { MinecraftMetadataInspector } from "./MinecraftMetadataInspector";
 import type { LauncherPreferences } from "../types";
 import type { DetectedInstall, GameDefinition, GameProfile, MinecraftBootstrapArtifact, MinecraftBootstrapRequest, MinecraftLauncher } from "../types";
 
@@ -178,6 +179,7 @@ export function SettingsPanel({
           )}
         </section>
 
+        {draft.game === "minecraft" && <section className="settings-section panel-card"><MinecraftMetadataInspector profileId={profile.id} directory={draft.installDir} disabled={busy} onNotice={onNotice} /></section>}
         {draft.game === "minecraft" && <JavaRuntimeSection profile={draft} busy={busy} onChange={setDraft} onNotice={onNotice} />}
 
         <section className="settings-section panel-card native-data-card">

@@ -56,6 +56,19 @@ export interface JavaDiscovery {
   limited: boolean;
 }
 
+export interface MinecraftMetadataInspection {
+  profileId: string;
+  directory: string;
+  gameVersion: string | null;
+  modLoader: string | null;
+  canUse: boolean;
+  sources: { fileName: string; instanceMetadata: boolean; gameVersion: string; modLoader: string }[];
+  issues: string[];
+  expectedGameVersion: string | null;
+  expectedModLoader: string | null;
+  comparison: "matches" | "mismatch" | "unknown";
+}
+
 export interface ProfileHealth {
   profileId: string;
   status: ReadinessStatus;

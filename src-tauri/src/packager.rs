@@ -229,7 +229,7 @@ fn prepare_at_with_limits(
         return Err("The publishing workspace must be outside the modpack source folder".into());
     }
 
-    let scan = scan_source(&source, username, user_profile)?;
+    let scan = scan_source_for_game(&source, username, user_profile, profile.game == "minecraft")?;
     let optional = optional_inventory(base, request.optional_paths.as_deref(), &scan.files)?;
     let mut issues = scan.issues;
     if !scan.files.is_empty()
@@ -585,7 +585,17 @@ struct ScanResult {
     issues: Vec<String>,
 }
 
+#[cfg(test)]
 fn scan_source(source: &Path, username: &str, user_profile: &str) -> Result<ScanResult, String> {
+    scan_source_for_game(source, username, user_profile, false)
+}
+
+fn scan_source_for_game(
+    source: &Path,
+    username: &str,
+    user_profile: &str,
+    minecraft: bool,
+) -> Result<ScanResult, String> {
     let mut candidates = Vec::new();
     let mut excluded_count = 0;
     let mut issues = Vec::new();
@@ -598,7 +608,16 @@ fn scan_source(source: &Path, username: &str, user_profile: &str) -> Result<Scan
                 return true;
             }
             let relative = entry.path().strip_prefix(source).unwrap_or(entry.path());
-            let excluded = should_exclude(relative, entry.file_type().is_dir());
+            // Export metadata is useful for read-only version discovery, but
+            // its raw author/launcher fields do not belong in a player sync.
+            // Keep nested game files and other games' manifest.json intact.
+            let export_metadata = minecraft
+                && entry.depth() == 1
+                && !entry.file_type().is_dir()
+                && ["manifest.json", "modrinth.index.json"]
+                    .iter()
+                    .any(|name| entry.file_name().eq_ignore_ascii_case(name));
+            let excluded = export_metadata || should_exclude(relative, entry.file_type().is_dir());
             if excluded {
                 excluded_count += 1;
             }
@@ -1484,6 +1503,40 @@ mod tests {
             .read_to_end(&mut packaged)
             .unwrap();
         assert_eq!(packaged, content);
+    }
+
+    #[test]
+    fn minecraft_root_export_metadata_is_excluded_without_hiding_other_game_files() {
+        let source = TempDir::new().unwrap();
+        fs::create_dir(source.path().join("config")).unwrap();
+        for name in [
+            "manifest.json",
+            "MODRINTH.INDEX.JSON",
+            "minecraftinstance.json",
+            "config/manifest.json",
+            "config/modrinth.index.json",
+        ] {
+            fs::write(source.path().join(name), b"{}").unwrap();
+        }
+        let minecraft = scan_source_for_game(source.path(), "FixtureUser", "", true).unwrap();
+        assert!(minecraft.issues.is_empty());
+        assert_eq!(minecraft.excluded_count, 3);
+        assert_eq!(
+            minecraft
+                .files
+                .iter()
+                .map(|file| file.relative.as_str())
+                .collect::<Vec<_>>(),
+            vec!["config/manifest.json", "config/modrinth.index.json"]
+        );
+        let other_game = scan_source_for_game(source.path(), "FixtureUser", "", false).unwrap();
+        assert!(
+            other_game
+                .files
+                .iter()
+                .any(|file| file.relative == "manifest.json")
+        );
+        assert_eq!(other_game.files.len(), 4);
     }
 
     #[test]

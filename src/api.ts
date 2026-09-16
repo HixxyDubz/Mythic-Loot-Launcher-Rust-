@@ -21,6 +21,7 @@ import type {
   LaunchOutcome,
   LauncherPreferences,
   JavaDiscovery,
+  MinecraftMetadataInspection,
   ManifestContentInput,
   ManifestContentSaveOutcome,
   MinecraftBootstrapArtifact,
@@ -90,6 +91,11 @@ export async function savePreferences(preferences: LauncherPreferences): Promise
 export async function detectJavaRuntimes(): Promise<JavaDiscovery> {
   requireNative("Java discovery");
   return invoke<JavaDiscovery>("detect_java_runtimes");
+}
+
+export async function inspectMinecraftMetadata(profileId: string, directory: string): Promise<MinecraftMetadataInspection> {
+  requireNative("Minecraft metadata inspection");
+  return invoke<MinecraftMetadataInspection>("inspect_minecraft_metadata", { profileId, directory });
 }
 
 export async function prepareJavaArguments(profile: GameProfile, memoryMb: number | null): Promise<string> {

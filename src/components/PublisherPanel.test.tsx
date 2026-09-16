@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { chooseLocalPath, loadPublishingChoices, prepareModpackRelease, publishModpackRelease, savePublishingChoices } from "../api";
+import { chooseLocalPath, inspectMinecraftMetadata, loadPublishingChoices, prepareModpackRelease, publishModpackRelease, savePublishingChoices } from "../api";
 import { testBootstrapPayload, testProfiles } from "../test/fixtures";
 import type { PackagePreview, PublishingChoices } from "../types";
 import { PublisherPanel } from "./PublisherPanel";
@@ -8,6 +8,7 @@ import { PublisherPanel } from "./PublisherPanel";
 vi.mock("../api", () => ({
   chooseLocalPath: vi.fn(), loadPublishingChoices: vi.fn(), savePublishingChoices: vi.fn(),
   prepareModpackRelease: vi.fn(), publishModpackRelease: vi.fn(),
+  inspectMinecraftMetadata: vi.fn(),
   createGithubRepository: vi.fn(), githubPublisherStatus: vi.fn(), preparePublicCatalog: vi.fn(), publishPublicCatalog: vi.fn(),
 }));
 vi.mock("./ManifestContentEditor", () => ({ ManifestContentEditor: () => null }));
@@ -80,5 +81,21 @@ describe("Per-release publishing choices", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Saved choices are damaged");
     expect(screen.getByRole("button", { name: "Prepare release locally" })).toBeDisabled();
     expect(savePublishingChoices).not.toHaveBeenCalled();
+  });
+
+  it("copies detected values into the draft only and invalidates a previous release preview", async () => {
+    vi.mocked(loadPublishingChoices).mockResolvedValue({ ...choices, request: { ...choices.request, profileId: "minecraft_main", gameVersion: "1.20.1", minecraftModLoader: "forge-47.4.0" } });
+    vi.mocked(inspectMinecraftMetadata).mockResolvedValue({ profileId: "minecraft_main", directory: choices.request.sourceDir, gameVersion: "1.21.1", modLoader: "neoforge-21.1.248", canUse: true, sources: [], issues: [], expectedGameVersion: null, expectedModLoader: null, comparison: "unknown" });
+    show(0);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Prepare release locally" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Prepare release locally" }));
+    await screen.findByRole("heading", { name: "Release preview ready" });
+    fireEvent.click(screen.getByRole("button", { name: "Inspect Minecraft metadata" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Use detected version and loader" }));
+    expect(screen.getByLabelText("Game version for this release")).toHaveValue("1.21.1");
+    expect(screen.getByLabelText("Minecraft loader identity")).toHaveValue("neoforge-21.1.248");
+    expect(screen.queryByRole("heading", { name: "Release preview ready" })).not.toBeInTheDocument();
+    expect(savePublishingChoices).not.toHaveBeenCalled();
+    expect(publishModpackRelease).not.toHaveBeenCalled();
   });
 });

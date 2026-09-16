@@ -75,6 +75,11 @@ button { color: inherit; }
 .runtime-result { display: grid; gap: 8px; margin: 10px 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
 .runtime-result strong { color: var(--text); }
 .runtime-result input { width: 100%; min-width: 0; padding: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+.minecraft-metadata-inspector { margin: 14px 0; padding: 16px; border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
+.minecraft-metadata-inspector h3 { margin-top: 0; font-size: 14px; }
+.minecraft-metadata-inspector p, .minecraft-metadata-inspector li { font-size: 12px; line-height: 1.6; color: var(--muted); overflow-wrap: anywhere; }
+.metadata-result { margin-top: 16px; }
+.metadata-issues { color: var(--yellow); }
 
 .titlebar {
   height: 39px;

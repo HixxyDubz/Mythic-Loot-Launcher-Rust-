@@ -35,6 +35,7 @@ import type {
   PackageRequest,
 } from "../types";
 import { PathField } from "./PathField";
+import { MinecraftMetadataInspector } from "./MinecraftMetadataInspector";
 import { ManifestContentEditor } from "./ManifestContentEditor";
 import { ManifestContentPublisher } from "./ManifestContentPublisher";
 
@@ -303,6 +304,7 @@ export function PublisherPanel({ profile, manifest, onBack, onNotice, onPayload 
             <label className="field field-wide"><span>Release notes</span><input value={releaseNotes} maxLength={20000} onChange={(event) => { setReleaseNotes(event.target.value); invalidateRelease(); }} /></label>
             <label className="field field-wide"><span>Optional files or folders (one relative path per line)</span><textarea aria-label="Optional files or folders" value={optionalPaths} maxLength={64000} onChange={(event) => { setOptionalPaths(event.target.value); invalidateRelease(); }} /><small>Paths are relative to the source folder. Folder selections include every publishable file beneath them. Leave blank to make all files required. Players choose extras in Update &amp; Repair; Safe Launch temporarily disables installed extras.</small></label>
           </div>
+          {profile.game === "minecraft" && <MinecraftMetadataInspector profileId={profile.id} directory={sourceDir} disabled={busy || loadingChoices || Boolean(choicesError)} onNotice={onNotice} onUse={(version, loader) => { setGameVersion(version); setMinecraftModLoader(loader); invalidateRelease(); }} />}
           {loadingChoices && <p role="status">Loading saved publishing choices…</p>}
           {choicesError && <p role="alert">{choicesError} Existing choices have not been overwritten.</p>}
           <button className="secondary-action publisher-preview" onClick={() => void saveChoices()} disabled={!canPrepareRelease}>Save publishing choices locally</button>

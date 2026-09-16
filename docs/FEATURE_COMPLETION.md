@@ -8,7 +8,7 @@ Rust is the maintained application. Python is read-only behavioral reference, ne
 - [x] Catalogue archival reconciliation without deleting player installations; remote HTTPS artwork enabled by CSP (0.1.9; remote rendering still needs a visual check).
 - [x] Separate newly saved unpublished content drafts from downloaded manifests (0.1.9).
 - [x] Explicit Minecraft loader identity authoring for arbitrary profiles and both launcher bootstrap formats (0.1.9; real imports remain an external check).
-- [ ] Automatic discovery of Minecraft version/loader metadata from the chosen source, without copying launcher account state.
+- [x] Read-only Minecraft version/loader discovery on request from the chosen source, without copying launcher account state (0.1.12; CurseForge instance/export and extracted Modrinth export JSON; database-only Modrinth instances remain manual/unknown).
 - [x] Optional inventory publishing, Player extras management, update preservation and Safe Launch protection (0.1.10; controlled file-transaction tests, not gameplay acceptance).
 - [ ] Recover pre-0.1.9 content edits saved inside a downloaded manifest; explicit draft discard/recovery controls.
 - [x] Read-only Java discovery and advanced direct-Java memory argument controls (0.1.11); CurseForge/Modrinth own their runtime settings and have linked setup guidance, not hidden configuration writes.
@@ -47,3 +47,9 @@ This does not complete the unchecked runtime/preferences, crash/recovery, progre
 `PREFERENCES_RUNTIME_0.1.11.md` records the working preferences and runtime slice. Preferences persist locally with backwards-compatible defaults and apply to real behavior. Normal launches can request a guarded close after success; Safe Launch stays open. Java discovery reads local release metadata without executing found binaries. The advanced memory editor changes only JVM heap arguments before the Java entry point, requires a direct Java executable, and leaves the result in the settings draft for review/save. Minecraft launchers continue managing their own Java and memory settings.
 
 The remaining unchecked implementation and external-acceptance items still prevent a feature-complete claim. No public release/feed is created by building or pushing this checkpoint.
+
+## 0.1.12 checkpoint
+
+`MINECRAFT_METADATA_0.1.12.md` records bounded, read-only metadata discovery and advisory requirement checks. Publisher applies only the reviewed version/loader to the unsaved draft and invalidates previous release approval. Settings compares recognised declarations with the native verified published manifest, never an unpublished authoring draft. Missing, malformed or conflicting files stay unknown. Export snapshots alone cannot prove installed compatibility. Modrinth's private database and archive files are not opened. Metadata does not gate sync/launch or prove gameplay compatibility.
+
+The existing real CurseForge source was read successfully and its metadata SHA-256 stayed unchanged. Launcher/export root metadata is excluded from Minecraft packages without excluding nested game files or other games' manifest.json. Legacy-draft recovery/discard controls are the next implementation item; the remaining checklist and external acceptance are still open.
