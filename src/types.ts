@@ -121,6 +121,14 @@ export interface ManifestContentSaveOutcome {
   payload: BootstrapPayload;
 }
 
+export interface ContentRecoveryState {
+  profileId: string;
+  draftRevision: string;
+  hasDraft: boolean;
+  candidates: { id: string; label: string; content: ManifestContentInput | null; problem: string | null }[];
+  limited: boolean;
+}
+
 export interface ContentReleasePreview {
   previewId: string;
   profileId: string;

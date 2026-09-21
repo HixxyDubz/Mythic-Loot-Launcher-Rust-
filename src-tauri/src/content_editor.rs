@@ -26,8 +26,10 @@ pub fn save_for_profile(
     profile: &GameProfile,
     content: ManifestContentInput,
 ) -> Result<bool, String> {
+    let root = storage::data_dir(app)?;
+    let _lock = crate::content_recovery::lock(&root)?;
     save_at(
-        &storage::data_dir(app)?,
+        &root,
         profile,
         manifest::load_for_profile(app, profile),
         content,
@@ -118,7 +120,7 @@ fn load_authoring_at(
     }
 }
 
-fn save_at(
+pub(crate) fn save_at(
     root: &Path,
     profile: &GameProfile,
     published: LoadedManifest,
@@ -131,7 +133,25 @@ fn save_at(
     safe_path::reject_link_path(&path)?;
     let mut bytes = serde_json::to_vec_pretty(&content).map_err(|error| error.to_string())?;
     bytes.push(b'\n');
+    if crate::content_recovery::draft_matches(root, profile, &bytes)? {
+        return Ok(false);
+    }
+    crate::content_recovery::archive_draft(root, profile)?;
+    for suffix in ["download", "previous"] {
+        safe_path::reject_link_path(&path.with_file_name(format!(
+            "{}.{}",
+            path.file_name().unwrap().to_string_lossy(),
+            suffix
+        )))?;
+    }
     remote::write_atomic(&path, &bytes)
+}
+
+pub(crate) fn validate_content(
+    profile: &GameProfile,
+    content: ManifestContentInput,
+) -> Result<(), String> {
+    apply_content(&mut draft_manifest(profile)?, profile, content)
 }
 
 fn draft_manifest(profile: &GameProfile) -> Result<Manifest, String> {

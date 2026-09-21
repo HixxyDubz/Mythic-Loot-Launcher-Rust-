@@ -10,7 +10,7 @@ Rust is the maintained application. Python is read-only behavioral reference, ne
 - [x] Explicit Minecraft loader identity authoring for arbitrary profiles and both launcher bootstrap formats (0.1.9; real imports remain an external check).
 - [x] Read-only Minecraft version/loader discovery on request from the chosen source, without copying launcher account state (0.1.12; CurseForge instance/export and extracted Modrinth export JSON; database-only Modrinth instances remain manual/unknown).
 - [x] Optional inventory publishing, Player extras management, update preservation and Safe Launch protection (0.1.10; controlled file-transaction tests, not gameplay acceptance).
-- [ ] Recover pre-0.1.9 content edits saved inside a downloaded manifest; explicit draft discard/recovery controls.
+- [x] Recover surviving pre-0.1.9 content from the cached manifest; preserve it before Developer refresh, and provide reviewed draft recovery/discard controls (0.1.13). Already overwritten text without a surviving copy cannot be reconstructed; cached text is not automatically classified as unpublished.
 - [x] Read-only Java discovery and advanced direct-Java memory argument controls (0.1.11); CurseForge/Modrinth own their runtime settings and have linked setup guidance, not hidden configuration writes.
 - [ ] Complete server-free game-folder adapters and local game-version checks; further third-party runtime automation would need reviewed integration.
 - [x] Startup update-check behavior, explicit catalogue refresh, close-after-normal-launch, reduced motion, colour theme, font and plain/decorative backgrounds (0.1.11).
@@ -53,3 +53,9 @@ The remaining unchecked implementation and external-acceptance items still preve
 `MINECRAFT_METADATA_0.1.12.md` records bounded, read-only metadata discovery and advisory requirement checks. Publisher applies only the reviewed version/loader to the unsaved draft and invalidates previous release approval. Settings compares recognised declarations with the native verified published manifest, never an unpublished authoring draft. Missing, malformed or conflicting files stay unknown. Export snapshots alone cannot prove installed compatibility. Modrinth's private database and archive files are not opened. Metadata does not gate sync/launch or prove gameplay compatibility.
 
 The existing real CurseForge source was read successfully and its metadata SHA-256 stayed unchanged. Launcher/export root metadata is excluded from Minecraft packages without excluding nested game files or other games' manifest.json. Legacy-draft recovery/discard controls are the next implementation item; the remaining checklist and external acceptance are still open.
+
+## 0.1.13 checkpoint
+
+`CONTENT_RECOVERY_0.1.13.md` records Developer-only local content recovery. Existing cached presentation fields are preserved before a changed downloaded/published manifest replaces them. Saved drafts retain previous versions and can be explicitly discarded with a recovery copy. Recovery requires reviewed native identifiers, an unchanged saved-draft revision and confirmation; it copies only presentation fields over the current authoring base. Cached text may have been published already, so no automatic recovery/classification occurs. Malformed drafts can be preserved/discarded but not blindly applied. No public upload is part of recovery.
+
+Remaining work includes broader server-free game-folder/local-version checks, geometry/background/presence, crash/session recovery and native progress/cancellation/interruption recovery, plus the external acceptance gates above.

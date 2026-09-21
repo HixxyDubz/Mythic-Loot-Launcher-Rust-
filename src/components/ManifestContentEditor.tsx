@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { FileCheck2, Newspaper, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
 import { saveManifestContent } from "../api";
+import { ContentRecoveryPanel } from "./ContentRecoveryPanel";
+import { useOperationScope } from "../useOperationScope";
 import type {
   BootstrapPayload,
   ChangelogEntry,
@@ -16,7 +18,11 @@ interface ManifestContentEditorProps {
   onSaved?: () => void;
 }
 
-export function ManifestContentEditor({
+export function ManifestContentEditor(props: ManifestContentEditorProps) {
+  return <EditorSession key={props.profileId} {...props} />;
+}
+
+function EditorSession({
   profileId,
   manifest,
   onNotice,
@@ -25,6 +31,8 @@ export function ManifestContentEditor({
 }: ManifestContentEditorProps) {
   const [draft, setDraft] = useState<ManifestContentInput>(() => fromManifest(manifest));
   const [busy, setBusy] = useState(false);
+  const [recoveryRevision, setRecoveryRevision] = useState(0);
+  const scope = useOperationScope();
 
   function update<K extends keyof ManifestContentInput>(key: K, value: ManifestContentInput[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -49,18 +57,22 @@ export function ManifestContentEditor({
   }
 
   async function save() {
+    if (busy) return;
+    const current = scope();
     setBusy(true);
     try {
       const result = await saveManifestContent(profileId, cleanContent(draft));
+      if (!current()) return;
+      setRecoveryRevision((value) => value + 1);
       onPayload(result.payload);
       onSaved?.();
       onNotice(result.changed
         ? "Manifest content saved locally and will be included in the next modpack release."
         : "Manifest content already matches the saved local copy.");
     } catch (error) {
-      onNotice(errorMessage(error));
+      if (current()) onNotice(errorMessage(error));
     } finally {
-      setBusy(false);
+      if (current()) setBusy(false);
     }
   }
 
@@ -74,6 +86,7 @@ export function ManifestContentEditor({
         </div>
       </div>
 
+      <fieldset disabled={busy} className="content-editor-fields">
       <div className="form-stack">
         <label className="field">
           <span>News announcement</span>
@@ -148,11 +161,18 @@ export function ManifestContentEditor({
       )}
 
       <div className="safety-note publisher-safety">
-        <FileCheck2 size={15} /> Saving writes only to the launcher-owned trusted manifest. Package URLs, hashes, file inventories, versions and multipart data are preserved and fully revalidated. This local save does not contact GitHub; the next release carries the content to Player.
+        <FileCheck2 size={15} /> Saving writes a separate local content draft and retains previous saved text for recovery. Package URLs, hashes, inventories and versions are not changed. Nothing reaches Player until you review and publish a release.
       </div>
       <button className="primary-action publisher-preview" onClick={() => void save()} disabled={busy}>
         {busy ? <RefreshCw className="spin" size={17} /> : <Save size={17} />} Save manifest content locally
       </button>
+      </fieldset>
+      <ContentRecoveryPanel key={recoveryRevision} profileId={profileId} disabled={busy} onBusy={setBusy} onNotice={onNotice} onApplied={(result) => {
+        const updated = result.payload.manifests.find((item) => item.profileId === profileId);
+        if (updated) setDraft(fromManifest(updated));
+        onPayload(result.payload);
+        onSaved?.();
+      }} />
     </section>
   );
 }

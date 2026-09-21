@@ -147,8 +147,15 @@ pub fn refresh_remote(app: &AppHandle, profile: &GameProfile) -> Result<bool, St
             errors.join("; ")
         ));
     }
-    let destination = safe_path::safe_join(&storage::data_dir(app)?, &profile.manifest_path)?;
-    remote::write_atomic(&destination, &bytes)
+    #[cfg(feature = "developer")]
+    {
+        crate::content_recovery::write_published(&storage::data_dir(app)?, profile, &bytes)
+    }
+    #[cfg(not(feature = "developer"))]
+    {
+        let destination = safe_path::safe_join(&storage::data_dir(app)?, &profile.manifest_path)?;
+        remote::write_atomic(&destination, &bytes)
+    }
 }
 
 #[cfg(feature = "developer")]
@@ -166,8 +173,7 @@ pub fn store_published(
             errors.join("; ")
         ));
     }
-    let destination = safe_path::safe_join(&storage::data_dir(app)?, &profile.manifest_path)?;
-    remote::write_atomic(&destination, bytes)
+    crate::content_recovery::write_published(&storage::data_dir(app)?, profile, bytes)
 }
 
 pub(crate) fn invalid_loaded(profile: &GameProfile, error: String) -> LoadedManifest {

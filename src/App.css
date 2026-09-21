@@ -80,6 +80,11 @@ button { color: inherit; }
 .minecraft-metadata-inspector p, .minecraft-metadata-inspector li { font-size: 12px; line-height: 1.6; color: var(--muted); overflow-wrap: anywhere; }
 .metadata-result { margin-top: 16px; }
 .metadata-issues { color: var(--yellow); }
+.content-editor-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.content-recovery-panel { border-top: 1px solid var(--line); margin-top: 22px; padding-top: 12px; }
+.content-recovery-panel p { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.content-recovery-preview { max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; padding: 12px; background: var(--bg); }
+.content-recovery-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
 
 .titlebar {
   height: 39px;

@@ -24,6 +24,7 @@ import type {
   MinecraftMetadataInspection,
   ManifestContentInput,
   ManifestContentSaveOutcome,
+  ContentRecoveryState,
   MinecraftBootstrapArtifact,
   MinecraftBootstrapRequest,
   ModpackPublicationOutcome,
@@ -196,6 +197,16 @@ export async function saveManifestContent(
 ): Promise<ManifestContentSaveOutcome> {
   requireNative("Manifest content saving");
   return invoke<ManifestContentSaveOutcome>("save_manifest_content", { profileId, content });
+}
+
+export async function inspectContentRecovery(profileId: string): Promise<ContentRecoveryState> {
+  requireNative("Content recovery inspection");
+  return invoke<ContentRecoveryState>("inspect_content_recovery", { profileId });
+}
+
+export async function applyContentRecovery(profileId: string, recoveryId: string | null, draftRevision: string, confirmed: boolean): Promise<ManifestContentSaveOutcome> {
+  requireNative("Content recovery or discard");
+  return invoke<ManifestContentSaveOutcome>("apply_content_recovery", { profileId, recoveryId, draftRevision, confirmed });
 }
 
 export async function prepareManifestContentRelease(profileId: string): Promise<ContentReleasePreview> {

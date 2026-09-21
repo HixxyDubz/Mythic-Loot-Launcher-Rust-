@@ -8,6 +8,8 @@ mod catalog_publisher;
 mod content_editor;
 #[cfg(feature = "developer")]
 mod content_publisher;
+#[cfg(feature = "developer")]
+mod content_recovery;
 mod detection;
 mod download;
 mod java_runtime;
@@ -450,6 +452,7 @@ fn save_manifest_content(
     profile_id: String,
     content: ManifestContentInput,
 ) -> Result<ManifestContentSaveOutcome, String> {
+    let _work = operations::WorkGuard::begin()?;
     let config = storage::load_or_create(&app)?;
     let profile = config
         .profiles
@@ -457,6 +460,60 @@ fn save_manifest_content(
         .find(|profile| profile.id == profile_id)
         .ok_or_else(|| "That modpack profile does not exist".to_string())?;
     let changed = content_editor::save_for_profile(&app, profile, content)?;
+    Ok(ManifestContentSaveOutcome {
+        changed,
+        payload: payload(&app)?,
+    })
+}
+
+#[cfg(feature = "developer")]
+#[tauri::command]
+fn inspect_content_recovery(
+    app: AppHandle,
+    profile_id: String,
+) -> Result<content_recovery::ContentRecoveryState, String> {
+    let _work = operations::WorkGuard::begin()?;
+    let config = storage::load_or_create(&app)?;
+    let profile = config
+        .profiles
+        .iter()
+        .find(|p| p.id == profile_id)
+        .ok_or("That modpack profile does not exist")?;
+    content_recovery::inspect(&storage::data_dir(&app)?, profile)
+}
+
+#[cfg(feature = "developer")]
+#[tauri::command]
+fn apply_content_recovery(
+    app: AppHandle,
+    profile_id: String,
+    recovery_id: Option<String>,
+    draft_revision: String,
+    confirmed: bool,
+) -> Result<ManifestContentSaveOutcome, String> {
+    let _work = operations::WorkGuard::begin()?;
+    let config = storage::load_or_create(&app)?;
+    let profile = config
+        .profiles
+        .iter()
+        .find(|p| p.id == profile_id)
+        .ok_or("That modpack profile does not exist")?;
+    let root = storage::data_dir(&app)?;
+    let changed = {
+        let _lock = content_recovery::lock(&root)?;
+        content_recovery::check_review(&root, profile, &draft_revision, confirmed)?;
+        if let Some(id) = recovery_id {
+            let content = content_recovery::recover_content(&root, profile, &id)?;
+            content_editor::save_at(
+                &root,
+                profile,
+                manifest::load_for_profile(&app, profile),
+                content,
+            )?
+        } else {
+            content_recovery::discard(&root, profile)?
+        }
+    };
     Ok(ManifestContentSaveOutcome {
         changed,
         payload: payload(&app)?,
@@ -1103,6 +1160,8 @@ pub fn run() {
         select_profile,
         save_profile,
         save_manifest_content,
+        inspect_content_recovery,
+        apply_content_recovery,
         detect_installations,
         prepare_minecraft_bootstrap,
         github_publisher_status,

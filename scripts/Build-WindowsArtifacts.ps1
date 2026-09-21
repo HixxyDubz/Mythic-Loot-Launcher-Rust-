@@ -116,6 +116,8 @@ foreach ($flavor in $flavors) {
             "prepare_public_catalog",
             "publish_public_catalog",
             "save_manifest_content",
+            "inspect_content_recovery",
+            "apply_content_recovery",
             "prepare_manifest_content_release",
             "publish_manifest_content_release",
             "prepare_player_app_release",
