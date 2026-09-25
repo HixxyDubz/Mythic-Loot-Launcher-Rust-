@@ -69,6 +69,18 @@ export interface MinecraftMetadataInspection {
   comparison: "matches" | "mismatch" | "unknown";
 }
 
+export interface GameInstallationCheck {
+  profileId: string;
+  game: string;
+  paths: { label: string; path: string; status: "present" | "missing" | "unsafe" | "unconfigured" }[];
+  clientFound: boolean | null;
+  gameVersion: string | null;
+  requiredGameVersion: string | null;
+  comparison: "matches" | "mismatch" | "unknown";
+  steamBuildId: string | null;
+  notes: string[];
+}
+
 export interface ProfileHealth {
   profileId: string;
   status: ReadinessStatus;
@@ -356,6 +368,7 @@ export interface DetectedInstall {
   exePath: string | null;
   installDir: string;
   source: string;
+  modpackDir?: string | null;
 }
 
 export type MinecraftLauncher = "curseforge" | "modrinth";

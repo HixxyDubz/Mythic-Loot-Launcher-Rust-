@@ -184,6 +184,8 @@ pub struct DetectedInstall {
     pub exe_path: Option<String>,
     pub install_dir: String,
     pub source: String,
+    #[serde(default)]
+    pub modpack_dir: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

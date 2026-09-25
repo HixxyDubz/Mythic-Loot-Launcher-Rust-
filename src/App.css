@@ -85,6 +85,8 @@ button { color: inherit; }
 .content-recovery-panel p { color: var(--muted); font-size: 12px; line-height: 1.6; }
 .content-recovery-preview { max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; padding: 12px; background: var(--bg); }
 .content-recovery-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.local-game-inspector p, .local-game-inspector li { font-size: 12px; color: var(--muted); line-height: 1.6; overflow-wrap: anywhere; }
+.local-game-inspector li span { display: block; }
 
 .titlebar {
   height: 39px;

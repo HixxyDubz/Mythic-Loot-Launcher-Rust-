@@ -6,6 +6,7 @@ import { PathField } from "./PathField";
 import { PreferencesSection } from "./PreferencesSection";
 import { JavaRuntimeSection } from "./JavaRuntimeSection";
 import { MinecraftMetadataInspector } from "./MinecraftMetadataInspector";
+import { GameInstallationInspector } from "./GameInstallationInspector";
 import type { LauncherPreferences } from "../types";
 import type { DetectedInstall, GameDefinition, GameProfile, MinecraftBootstrapArtifact, MinecraftBootstrapRequest, MinecraftLauncher } from "../types";
 
@@ -149,24 +150,25 @@ export function SettingsPanel({
             <div className="detection-results">
               <div className="results-title"><Radar size={16} /> Detected installations <span>{candidates.length}</span></div>
               {candidates.map((candidate) => {
-                const modpackDir = detectedModpackBase(candidate.installDir, draft.deploymentSubdir);
-                const selected = pathsEqual(draft.installDir, modpackDir) && (!candidate.exePath || pathsEqual(draft.gameExePath, candidate.exePath));
+                const modpackDir = candidate.modpackDir ?? detectedModpackBase(candidate.installDir, draft.deploymentSubdir);
+                const selected = pathsEqual(draft.installDir, modpackDir) && pathsEqual(draft.gameExePath, candidate.exePath ?? "");
                 const syncTarget = draft.game === "minecraft" && isMinecraftSyncTarget(candidate.source);
                 return (
                   <button
                     key={`${candidate.source}-${candidate.installDir}`}
                     className={selected ? "selected" : ""}
+                    disabled={busy}
                     onClick={() => setDraft((current) => ({
                       ...current,
                       installDir: modpackDir,
                       gameDir: candidate.installDir,
-                      gameExePath: candidate.exePath ?? current.gameExePath,
+                      gameExePath: candidate.exePath ?? "",
                       minecraftLauncher: current.game === "minecraft" && syncTarget ? candidate.source : "",
                     }))}
                   >
                     <span>
                       <strong>{candidate.label}</strong>
-                      <small>{draft.deploymentSubdir ? `${candidate.installDir} · manages ${modpackDir}` : candidate.installDir}</small>
+                      <small>{!pathsEqual(candidate.installDir, modpackDir) ? `${candidate.installDir} · manages ${modpackDir}` : candidate.installDir}</small>
                     </span>
                     {selected ? <Check size={17} /> : <span className="use-label">{syncTarget ? "Use as sync target" : "Use"}</span>}
                   </button>
@@ -181,6 +183,7 @@ export function SettingsPanel({
 
         {draft.game === "minecraft" && <section className="settings-section panel-card"><MinecraftMetadataInspector profileId={profile.id} directory={draft.installDir} disabled={busy} onNotice={onNotice} /></section>}
         {draft.game === "minecraft" && <JavaRuntimeSection profile={draft} busy={busy} onChange={setDraft} onNotice={onNotice} />}
+        {draft.game !== "minecraft" && <GameInstallationInspector profile={draft} disabled={busy} />}
 
         <section className="settings-section panel-card native-data-card">
           <div className="section-title"><HardDrive /><div><h2>Native data location</h2><p>{dataDir}</p></div></div>

@@ -19,10 +19,14 @@ pub fn detect(profile: &GameProfile) -> Vec<DetectedInstall> {
 
 fn configured_install(profile: &GameProfile) -> Option<DetectedInstall> {
     let exe = nonempty_path(&profile.game_exe_path);
-    let install = nonempty_path(&profile.install_dir).or_else(|| {
-        exe.as_ref()
-            .and_then(|path| path.parent().map(Path::to_path_buf))
-    })?;
+    let install = if profile.game == "minecraft" {
+        nonempty_path(&profile.install_dir).or_else(|| nonempty_path(&profile.game_dir))
+    } else {
+        nonempty_path(&profile.game_dir).or_else(|| {
+            exe.as_deref()
+                .and_then(|exe| root_from_executable(&profile.game, exe))
+        })
+    }?;
     if !install.exists() && exe.as_ref().is_none_or(|path| !path.exists()) {
         return None;
     }
@@ -30,8 +34,40 @@ fn configured_install(profile: &GameProfile) -> Option<DetectedInstall> {
         label: "Current configuration".into(),
         exe_path: exe.map(|path| path.display().to_string()),
         install_dir: install.display().to_string(),
-        source: "configured".into(),
+        source: if profile.game == "minecraft"
+            && matches!(
+                profile.minecraft_launcher.as_str(),
+                "curseforge" | "modrinth"
+            ) {
+            profile.minecraft_launcher.clone()
+        } else {
+            "configured".into()
+        },
+        modpack_dir: nonempty_path(&profile.install_dir).map(|path| path.display().to_string()),
     })
+}
+
+fn root_from_executable(game: &str, exe: &Path) -> Option<PathBuf> {
+    let spec = steam_spec(game)?;
+    for relative in spec.executables {
+        let parts: Vec<_> = relative.split('/').collect();
+        let mut remaining = exe;
+        let mut matches = true;
+        for part in parts.iter().rev() {
+            if !remaining
+                .file_name()
+                .is_some_and(|name| name.eq_ignore_ascii_case(part))
+            {
+                matches = false;
+                break;
+            }
+            remaining = remaining.parent()?;
+        }
+        if matches {
+            return Some(remaining.to_path_buf());
+        }
+    }
+    None
 }
 
 fn detect_minecraft() -> Vec<DetectedInstall> {
@@ -157,9 +193,9 @@ fn add_child_directories(
     let Ok(entries) = fs::read_dir(parent) else {
         return;
     };
-    for entry in entries.flatten() {
+    for entry in entries.take(512).flatten() {
         let path = entry.path();
-        if !path.is_dir() {
+        if !path.is_dir() || crate::safe_path::reject_link_path(&path).is_err() {
             continue;
         }
         output.push(candidate(
@@ -171,19 +207,22 @@ fn add_child_directories(
     }
 }
 
-struct SteamSpec {
-    folder: &'static str,
-    executables: &'static [&'static str],
+pub(crate) struct SteamSpec {
+    pub folder: &'static str,
+    pub executables: &'static [&'static str],
+    pub app_id: Option<&'static str>,
 }
 
-fn steam_spec(game: &str) -> Option<SteamSpec> {
+pub(crate) fn steam_spec(game: &str) -> Option<SteamSpec> {
     match game {
         "seven_days" => Some(SteamSpec {
             folder: "7 Days To Die",
+            app_id: Some("251570"),
             executables: &["7DaysToDie.exe", "7dLauncher.exe"],
         }),
         "palworld" => Some(SteamSpec {
             folder: "Palworld",
+            app_id: Some("1623730"),
             executables: &[
                 "Palworld.exe",
                 "Pal/Binaries/Win64/Palworld-Win64-Shipping.exe",
@@ -191,25 +230,33 @@ fn steam_spec(game: &str) -> Option<SteamSpec> {
         }),
         "core_keeper" => Some(SteamSpec {
             folder: "Core Keeper",
+            app_id: Some("1621690"),
             executables: &["CoreKeeper.exe"],
         }),
         "marvel_heroes" => Some(SteamSpec {
             folder: "Marvel Heroes",
+            app_id: None,
             executables: &[
+                "UnrealEngine3/Binaries/Win64/MHGame.exe",
+                "UnrealEngine3/Binaries/Win32/MHGame.exe",
+                "MHGame.exe",
                 "UnrealEngine3/Binaries/Win64/MarvelGame.exe",
                 "MarvelGame.exe",
             ],
         }),
         "valheim" => Some(SteamSpec {
             folder: "Valheim",
+            app_id: Some("892970"),
             executables: &["valheim.exe"],
         }),
         "factorio" => Some(SteamSpec {
             folder: "Factorio",
-            executables: &["bin/x64/factorio.exe"],
+            app_id: Some("427520"),
+            executables: &["bin/x64/factorio.exe", "factorio.exe"],
         }),
         "stardew_valley" => Some(SteamSpec {
             folder: "Stardew Valley",
+            app_id: Some("413150"),
             executables: &["Stardew Valley.exe"],
         }),
         _ => None,
@@ -249,10 +296,15 @@ fn steam_library_roots() -> Vec<PathBuf> {
     if let Some(program_files) = env_path("ProgramFiles") {
         roots.push(program_files.join("Steam"));
     }
+    #[cfg(windows)]
+    for drive in ['C', 'D', 'E', 'F', 'G', 'H'] {
+        roots.push(PathBuf::from(format!("{drive}:/Steam")));
+        roots.push(PathBuf::from(format!("{drive}:/Program Files (x86)/Steam")));
+    }
     let mut extra = Vec::new();
     for root in &roots {
         let vdf = root.join("steamapps/libraryfolders.vdf");
-        if let Ok(text) = fs::read_to_string(vdf) {
+        if let Ok(text) = crate::game_installation::read_text(&vdf) {
             extra.extend(parse_steam_library_paths(&text));
         }
     }
@@ -286,6 +338,7 @@ fn candidate(label: &str, exe: Option<PathBuf>, install: PathBuf, source: &str) 
             .map(|path| path.display().to_string()),
         install_dir: install.display().to_string(),
         source: source.into(),
+        modpack_dir: None,
     }
 }
 
@@ -348,5 +401,52 @@ mod tests {
         assert_eq!(roots.len(), 2);
         assert!(roots[0].ends_with("curseforge/minecraft/Instances"));
         assert!(roots[1].ends_with("CurseForge/Minecraft/Instances"));
+    }
+
+    #[test]
+    fn configured_candidate_preserves_exact_modpack_target_and_game_root() {
+        let root = tempfile::tempdir().unwrap();
+        let mut p = crate::models::LauncherConfig::default().profiles.remove(1);
+        p.game_dir = root.path().display().to_string();
+        p.install_dir = root.path().join("Mods").display().to_string();
+        p.game_exe_path = root.path().join("7DaysToDie.exe").display().to_string();
+        let found = configured_install(&p).unwrap();
+        assert_eq!(found.install_dir, p.game_dir);
+        assert_eq!(found.modpack_dir, Some(p.install_dir.clone()));
+        p.game_dir.clear();
+        let found = configured_install(&p).unwrap();
+        assert_eq!(found.install_dir, root.path().display().to_string());
+        assert!(!found.install_dir.ends_with("Mods"));
+    }
+    #[test]
+    fn nested_client_candidates_resolve_game_root_and_preserve_legacy_names() {
+        let root = tempfile::tempdir().unwrap();
+        for (game, relative) in [
+            ("factorio", "bin/x64/factorio.exe"),
+            ("factorio", "factorio.exe"),
+            ("marvel_heroes", "UnrealEngine3/Binaries/Win32/MHGame.exe"),
+            ("palworld", "Pal/Binaries/Win64/Palworld-Win64-Shipping.exe"),
+        ] {
+            assert_eq!(
+                root_from_executable(game, &root.path().join(relative)),
+                Some(root.path().to_path_buf())
+            );
+        }
+        assert!(root_from_executable("seven_days", &root.path().join("Unknown.exe")).is_none());
+    }
+    #[test]
+    fn configured_minecraft_keeps_launcher_kind_and_instance_root() {
+        let root = tempfile::tempdir().unwrap();
+        let mut p = crate::models::LauncherConfig::default().profiles.remove(0);
+        p.install_dir = root.path().display().to_string();
+        p.minecraft_launcher = "modrinth".into();
+        p.game_exe_path = root
+            .path()
+            .join("launcher/Modrinth App.exe")
+            .display()
+            .to_string();
+        let result = configured_install(&p).unwrap();
+        assert_eq!(result.source, "modrinth");
+        assert_eq!(result.install_dir, p.install_dir);
     }
 }

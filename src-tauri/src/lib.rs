@@ -12,6 +12,7 @@ mod content_publisher;
 mod content_recovery;
 mod detection;
 mod download;
+mod game_installation;
 mod java_runtime;
 mod launch;
 mod manifest;
@@ -1141,6 +1142,7 @@ pub fn run() {
         save_preferences,
         detect_java_runtimes,
         inspect_minecraft_metadata,
+        game_installation::inspect_game_installation,
         prepare_java_arguments,
         get_optional_extras,
         bootstrap,
@@ -1193,6 +1195,7 @@ pub fn run() {
         save_preferences,
         detect_java_runtimes,
         inspect_minecraft_metadata,
+        game_installation::inspect_game_installation,
         prepare_java_arguments,
         get_optional_extras,
         bootstrap,

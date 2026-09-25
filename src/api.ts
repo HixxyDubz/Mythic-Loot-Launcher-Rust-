@@ -22,6 +22,7 @@ import type {
   LauncherPreferences,
   JavaDiscovery,
   MinecraftMetadataInspection,
+  GameInstallationCheck,
   ManifestContentInput,
   ManifestContentSaveOutcome,
   ContentRecoveryState,
@@ -97,6 +98,11 @@ export async function detectJavaRuntimes(): Promise<JavaDiscovery> {
 export async function inspectMinecraftMetadata(profileId: string, directory: string): Promise<MinecraftMetadataInspection> {
   requireNative("Minecraft metadata inspection");
   return invoke<MinecraftMetadataInspection>("inspect_minecraft_metadata", { profileId, directory });
+}
+
+export async function inspectGameInstallation(profile: GameProfile): Promise<GameInstallationCheck> {
+  requireNative("Local game installation checks");
+  return invoke<GameInstallationCheck>("inspect_game_installation", { profileId: profile.id, game: profile.game, gameDirectory: profile.gameDir, installDirectory: profile.installDir, executable: profile.gameExePath });
 }
 
 export async function prepareJavaArguments(profile: GameProfile, memoryMb: number | null): Promise<string> {

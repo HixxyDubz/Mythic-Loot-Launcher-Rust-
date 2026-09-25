@@ -12,7 +12,8 @@ Rust is the maintained application. Python is read-only behavioral reference, ne
 - [x] Optional inventory publishing, Player extras management, update preservation and Safe Launch protection (0.1.10; controlled file-transaction tests, not gameplay acceptance).
 - [x] Recover surviving pre-0.1.9 content from the cached manifest; preserve it before Developer refresh, and provide reviewed draft recovery/discard controls (0.1.13). Already overwritten text without a surviving copy cannot be reconstructed; cached text is not automatically classified as unpublished.
 - [x] Read-only Java discovery and advanced direct-Java memory argument controls (0.1.11); CurseForge/Modrinth own their runtime settings and have linked setup guidance, not hidden configuration writes.
-- [ ] Complete server-free game-folder adapters and local game-version checks; further third-party runtime automation would need reviewed integration.
+- [x] Read-only cross-game path/client checks, separate Steam installed-build evidence, Factorio base-version comparison, configured-target preservation and missing legacy client candidates (0.1.14).
+- [ ] Remaining server-free adapter parity: Hytale/default user-data target discovery, Factorio portable/custom target routing, and game-version readers where reliable metadata is available. Unknown versions must remain unknown; third-party runtime automation needs reviewed integration.
 - [x] Startup update-check behavior, explicit catalogue refresh, close-after-normal-launch, reduced motion, colour theme, font and plain/decorative backgrounds (0.1.11).
 - [ ] Window geometry persistence, custom background selection and opt-in presence.
 - [ ] Crash/session tracking, automatic recovery prompts, log diagnosis and support export.
@@ -59,3 +60,7 @@ The existing real CurseForge source was read successfully and its metadata SHA-2
 `CONTENT_RECOVERY_0.1.13.md` records Developer-only local content recovery. Existing cached presentation fields are preserved before a changed downloaded/published manifest replaces them. Saved drafts retain previous versions and can be explicitly discarded with a recovery copy. Recovery requires reviewed native identifiers, an unchanged saved-draft revision and confirmation; it copies only presentation fields over the current authoring base. Cached text may have been published already, so no automatic recovery/classification occurs. Malformed drafts can be preserved/discarded but not blindly applied. No public upload is part of recovery.
 
 Remaining work includes broader server-free game-folder/local-version checks, geometry/background/presence, crash/session recovery and native progress/cancellation/interruption recovery, plus the external acceptance gates above.
+
+## 0.1.14 checkpoint
+
+`INSTALLATION_CHECKS_0.1.14.md` records advisory local installation checks in both editions. Configured game roots and exact modpack targets remain separate; selecting a candidate cannot append `Mods` twice or retain an unrelated old executable when the new one is missing. Known nested Factorio/Palworld/Marvel Heroes executable layouts resolve to the game root. Steam build IDs remain distinct from user-facing game versions. Factorio's base metadata can be compared with an exact published version. Missing, unsupported or ambiguous evidence never implies version compatibility. Real 7DTD read-only acceptance found the client/build without modifying its Steam metadata. This is a partial adapter checkpoint, not completion of every game's version reader or target routing.

@@ -219,6 +219,21 @@ describe("Mythic Loot launcher shell", () => {
     }));
   });
 
+  it("preserves the configured modpack target and clears a missing detected executable", () => {
+    const onSave = vi.fn();
+    render(<SettingsPanel preferences={testBootstrapPayload().config.preferences} onSavePreferences={async () => undefined} onRefreshCatalogue={() => undefined}
+      profile={{ ...testProfiles[1], gameExePath: "C:\\OldGame\\Old.exe" }} games={testBootstrapPayload().games} dataDir="Test data directory" busy={false}
+      candidates={[{ label: "Current configuration", exePath: null, installDir: "C:\\Games\\7 Days To Die", modpackDir: "D:\\ChosenPack\\Mods", source: "configured" }]}
+      onBack={() => undefined} onDetect={() => undefined} onSave={onSave} onPrepareMinecraftBootstrap={async () => { throw new Error("not used"); }} onNotice={() => undefined} />);
+    fireEvent.click(screen.getByRole("button", { name: /Current configuration/ }));
+    expect(screen.getByLabelText("Game directory")).toHaveValue("C:\\Games\\7 Days To Die");
+    expect(screen.getByLabelText("Modpack base folder")).toHaveValue("D:\\ChosenPack\\Mods");
+    expect(screen.getByLabelText("Game or launcher executable")).toHaveValue("");
+    expect(onSave).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /save settings/i }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ installDir: "D:\\ChosenPack\\Mods", gameExePath: "" }));
+  });
+
   it("loads truthful first-run readiness and opens settings", async () => {
     render(<App />);
     expect(await screen.findByRole("heading", { name: "Mythic Loot Minecraft" })).toBeInTheDocument();
