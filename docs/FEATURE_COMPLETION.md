@@ -13,7 +13,8 @@ Rust is the maintained application. Python is read-only behavioral reference, ne
 - [x] Recover surviving pre-0.1.9 content from the cached manifest; preserve it before Developer refresh, and provide reviewed draft recovery/discard controls (0.1.13). Already overwritten text without a surviving copy cannot be reconstructed; cached text is not automatically classified as unpublished.
 - [x] Read-only Java discovery and advanced direct-Java memory argument controls (0.1.11); CurseForge/Modrinth own their runtime settings and have linked setup guidance, not hidden configuration writes.
 - [x] Read-only cross-game path/client checks, separate Steam installed-build evidence, Factorio base-version comparison, configured-target preservation and missing legacy client candidates (0.1.14).
-- [ ] Remaining server-free adapter parity: Hytale/default user-data target discovery, Factorio portable/custom target routing, and game-version readers where reliable metadata is available. Unknown versions must remain unknown; third-party runtime automation needs reviewed integration.
+- [x] Hytale default-root patchline-specific mod targets and Factorio declared system/portable/custom targets, including supported absolute command-line overrides (0.1.15). Detection is read-only and reviewed; unsupported/missing configuration remains manual.
+- [ ] Remaining server-free adapter parity: additional custom Hytale root discovery, broader game-version readers where reliable metadata is available, and real adapter gameplay acceptance. Unknown versions must remain unknown; third-party runtime automation needs reviewed integration.
 - [x] Startup update-check behavior, explicit catalogue refresh, close-after-normal-launch, reduced motion, colour theme, font and plain/decorative backgrounds (0.1.11).
 - [ ] Window geometry persistence, custom background selection and opt-in presence.
 - [ ] Crash/session tracking, automatic recovery prompts, log diagnosis and support export.
@@ -26,6 +27,13 @@ Rust is the maintained application. Python is read-only behavioral reference, ne
 - [ ] Real CurseForge and Modrinth imports and first game launch.
 - [ ] Clean-machine installer execution and friend testing.
 - [ ] Explicitly published Player app update feed and live old-to-new transition.
+
+## Security follow-up
+
+- [x] Install cargo-audit and patch rustls 0.23.43 to 0.23.45 for RUSTSEC-2026-0285 (0.1.15).
+- [ ] Review upstream advisory warnings as dependencies evolve; the audit is not a zero-risk certificate.
+- [ ] Cryptographically authenticated app updates and modpack/catalogue metadata. Current transport/hash checks do not protect against compromised publisher credentials. Local key-based update signing is separate from paid Windows publisher certificates; no keys were generated in 0.1.15.
+- Windows Authenticode signing is deliberately out of scope per the owner's preference for private friend testing.
 
 The publisher must ask for the release's game version and selected source folder, not a permanently hard-coded 7DTD version. Preparing a local preview is not permission to upload live files. Servers remain out of scope.
 

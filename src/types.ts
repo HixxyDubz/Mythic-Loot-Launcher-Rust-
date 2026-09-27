@@ -369,6 +369,7 @@ export interface DetectedInstall {
   installDir: string;
   source: string;
   modpackDir?: string | null;
+  targetNote?: string;
 }
 
 export type MinecraftLauncher = "curseforge" | "modrinth";

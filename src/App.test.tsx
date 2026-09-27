@@ -243,6 +243,33 @@ describe("Mythic Loot launcher shell", () => {
     expect(screen.getByLabelText("Game or launcher executable")).toBeInTheDocument();
   });
 
+  it("keeps unresolved Factorio targets blank and invalidates discovery after argument edits", () => {
+    const onSave = vi.fn();
+    render(<SettingsPanel preferences={testBootstrapPayload().config.preferences} onSavePreferences={async () => undefined} onRefreshCatalogue={() => undefined}
+      profile={{ ...testProfiles[1], game: "factorio", installDir: "D:\\OldPack" }} games={testBootstrapPayload().games} dataDir="Test" busy={false}
+      candidates={[{ label: "Factorio discovery", exePath: "C:\\Games\\Factorio\\factorio.exe", installDir: "C:\\Games\\Factorio", modpackDir: "", source: "factorio", targetNote: "Missing active configuration" }]}
+      onBack={() => undefined} onDetect={() => undefined} onSave={onSave} onPrepareMinecraftBootstrap={async () => { throw new Error("not used"); }} onNotice={() => undefined} />);
+    fireEvent.click(screen.getByRole("button", { name: /Factorio discovery/ }));
+    expect(screen.getByLabelText("Modpack base folder")).toHaveValue("");
+    expect(screen.getByText(/Modpack folder unresolved/)).toBeInTheDocument();
+    expect(onSave).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("Launch arguments"), { target: { value: "--mod-directory D:\\Other" } });
+    expect(screen.queryByRole("button", { name: /Factorio discovery/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/Settings changed. Run detection again/)).toBeInTheDocument();
+  });
+
+  it("uses a patchline-specific Hytale target without appending another Mods folder", () => {
+    const onSave = vi.fn();
+    render(<SettingsPanel preferences={testBootstrapPayload().config.preferences} onSavePreferences={async () => undefined} onRefreshCatalogue={() => undefined}
+      profile={{ ...testProfiles[1], game: "hytale", deploymentSubdir: "Mods" }} games={testBootstrapPayload().games} dataDir="Test" busy={false}
+      candidates={[{ label: "Hytale · pre-release", exePath: null, installDir: "C:\\Hytale\\install\\pre-release\\package\\game\\latest", modpackDir: "C:\\Hytale\\data\\pre-release\\Mods", source: "hytale-launcher", targetNote: "Choose the same patchline in Hytale Launcher" }]}
+      onBack={() => undefined} onDetect={() => undefined} onSave={onSave} onPrepareMinecraftBootstrap={async () => { throw new Error("not used"); }} onNotice={() => undefined} />);
+    fireEvent.click(screen.getByRole("button", { name: /Hytale · pre-release/ }));
+    expect(screen.getByLabelText("Modpack base folder")).toHaveValue("C:\\Hytale\\data\\pre-release\\Mods");
+    expect(screen.getByLabelText("Game or launcher executable")).toHaveValue("");
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
   it("merges a refreshed public catalogue into the visible modpack list", async () => {
     const newProfile = {
       ...testProfiles[0],

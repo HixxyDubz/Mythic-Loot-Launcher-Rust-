@@ -1,4 +1,5 @@
 mod activity;
+mod adapter_targets;
 #[cfg(feature = "developer")]
 mod app_update_publisher;
 mod catalog;

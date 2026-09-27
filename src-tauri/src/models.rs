@@ -186,6 +186,8 @@ pub struct DetectedInstall {
     pub source: String,
     #[serde(default)]
     pub modpack_dir: Option<String>,
+    #[serde(default)]
+    pub target_note: String,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

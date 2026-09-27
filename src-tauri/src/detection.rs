@@ -9,8 +9,66 @@ use crate::models::{DetectedInstall, GameProfile};
 pub fn detect(profile: &GameProfile) -> Vec<DetectedInstall> {
     let mut installs = match profile.game.as_str() {
         "minecraft" => detect_minecraft(),
+        "hytale" => crate::adapter_targets::detect_hytale(
+            env_path("APPDATA").as_deref(),
+            env_path("LOCALAPPDATA").as_deref(),
+        ),
         game => detect_steam_game(game),
     };
+    if profile.game == "factorio" {
+        for base in [env_path("ProgramFiles"), env_path("ProgramFiles(x86)")]
+            .into_iter()
+            .flatten()
+        {
+            let root = base.join("Factorio");
+            if root.is_dir()
+                && let Some(spec) = steam_spec("factorio")
+            {
+                let exe = spec
+                    .executables
+                    .iter()
+                    .map(|p| root.join(p))
+                    .find(|p| p.is_file());
+                installs.push(candidate("Factorio · standalone", exe, root, "factorio"));
+            }
+        }
+        if let Some(root) = nonempty_path(&profile.game_dir).or_else(|| {
+            nonempty_path(&profile.game_exe_path)
+                .and_then(|exe| root_from_executable("factorio", &exe))
+        }) && root.is_dir()
+        {
+            let exe = nonempty_path(&profile.game_exe_path).or_else(|| {
+                steam_spec("factorio")?
+                    .executables
+                    .iter()
+                    .map(|p| root.join(p))
+                    .find(|p| p.is_file())
+            });
+            installs.insert(
+                0,
+                candidate("Factorio · configured installation", exe, root, "factorio"),
+            );
+        }
+        for install in &mut installs {
+            match crate::adapter_targets::factorio_mods(
+                Path::new(&install.install_dir),
+                install.exe_path.as_deref().map(Path::new),
+                env_path("APPDATA").as_deref(),
+                &profile.launch_args,
+            ) {
+                Ok(path) => {
+                    install.modpack_dir = Some(path.display().to_string());
+                    install.target_note = "Factorio mods target resolved from local configuration. Review before saving; command-line overrides in Steam or external shortcuts are not inspected.".into();
+                }
+                Err(reason) => {
+                    install.modpack_dir = Some(String::new());
+                    install.target_note = format!(
+                        "Modpack folder unresolved: {reason}. Choose the actual mods folder manually."
+                    );
+                }
+            }
+        }
+    }
     if let Some(configured) = configured_install(profile) {
         installs.insert(0, configured);
     }
@@ -43,7 +101,11 @@ fn configured_install(profile: &GameProfile) -> Option<DetectedInstall> {
         } else {
             "configured".into()
         },
-        modpack_dir: nonempty_path(&profile.install_dir).map(|path| path.display().to_string()),
+        modpack_dir: nonempty_path(&profile.install_dir)
+            .map(|path| path.display().to_string())
+            .or_else(|| matches!(profile.game.as_str(), "factorio" | "hytale").then(String::new)),
+        target_note: "Saved local paths; detection does not verify that the game uses this target."
+            .into(),
     })
 }
 
@@ -339,6 +401,7 @@ fn candidate(label: &str, exe: Option<PathBuf>, install: PathBuf, source: &str) 
         install_dir: install.display().to_string(),
         source: source.into(),
         modpack_dir: None,
+        target_note: String::new(),
     }
 }
 
@@ -346,7 +409,19 @@ fn deduplicate(installs: Vec<DetectedInstall>) -> Vec<DetectedInstall> {
     let mut seen = HashSet::new();
     installs
         .into_iter()
-        .filter(|install| seen.insert(install.install_dir.to_lowercase()))
+        .filter(|install| {
+            seen.insert((
+                normalized(Path::new(&install.install_dir)),
+                install
+                    .modpack_dir
+                    .as_deref()
+                    .map(|path| normalized(Path::new(path))),
+                install
+                    .exe_path
+                    .as_deref()
+                    .map(|path| normalized(Path::new(path))),
+            ))
+        })
         .collect()
 }
 
@@ -448,5 +523,29 @@ mod tests {
         let result = configured_install(&p).unwrap();
         assert_eq!(result.source, "modrinth");
         assert_eq!(result.install_dir, p.install_dir);
+    }
+
+    #[test]
+    fn user_data_games_do_not_fall_back_to_the_game_root() {
+        let root = tempfile::tempdir().unwrap();
+        let mut profile = crate::models::LauncherConfig::default().profiles.remove(0);
+        profile.game_dir = root.path().display().to_string();
+        profile.install_dir.clear();
+        for game in ["factorio", "hytale"] {
+            profile.game = game.into();
+            assert_eq!(
+                configured_install(&profile).unwrap().modpack_dir,
+                Some(String::new())
+            );
+        }
+    }
+
+    #[test]
+    fn different_targets_for_one_game_root_remain_reviewable() {
+        let mut first = candidate("Configured", None, PathBuf::from("C:/Game"), "configured");
+        first.modpack_dir = Some("C:/Old/mods".into());
+        let mut second = first.clone();
+        second.modpack_dir = Some("D:/New/mods".into());
+        assert_eq!(deduplicate(vec![first.clone(), second, first]).len(), 2);
     }
 }

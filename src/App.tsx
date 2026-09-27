@@ -139,6 +139,7 @@ function App() {
 
   async function detect(profile: GameProfile) {
     setBusy(true);
+    setCandidates([]);
     setNotice("");
     try {
       const found = await detectInstallations(profile);

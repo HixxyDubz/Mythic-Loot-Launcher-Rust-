@@ -45,6 +45,7 @@ export function SettingsPanel({
   const previousProfile = useRef(profile);
   const [bootstrapArtifact, setBootstrapArtifact] = useState<MinecraftBootstrapArtifact | null>(null);
   const [preparingLauncher, setPreparingLauncher] = useState<MinecraftLauncher | null>(null);
+  const [detectionStale, setDetectionStale] = useState(false);
   useEffect(() => {
     const previous = previousProfile.current;
     previousProfile.current = profile;
@@ -54,8 +55,10 @@ export function SettingsPanel({
     setBootstrapArtifact(null);
   }, [profile]);
 
-  const update = <K extends keyof GameProfile>(key: K, value: GameProfile[K]) =>
+  const update = <K extends keyof GameProfile>(key: K, value: GameProfile[K]) => {
+    if (["game", "gameDir", "gameExePath", "launchArgs", "installDir", "deploymentSubdir"].includes(key)) setDetectionStale(true);
     setDraft((current) => ({ ...current, [key]: value }));
+  };
 
   async function prepareBootstrap(launcher: MinecraftLauncher) {
     setPreparingLauncher(launcher);
@@ -107,7 +110,7 @@ export function SettingsPanel({
           <div className="section-title">
             <HardDrive />
             <div><h2>{draft.game === "minecraft" ? "Launcher sync target" : "Game and modpack"}</h2><p>Detected paths stay local to this computer.</p></div>
-            <button className="detect-button" onClick={() => onDetect(draft)} disabled={busy}><Radar size={16} /> Detect installs</button>
+            <button className="detect-button" onClick={() => { setDetectionStale(false); onDetect(draft); }} disabled={busy}><Radar size={16} /> Detect installs</button>
           </div>
           {draft.game === "minecraft" && (
             <div className="minecraft-sync-note">
@@ -143,10 +146,10 @@ export function SettingsPanel({
             <PathField label="Game directory" value={draft.gameDir} placeholder="Optional separate game data directory" disabled={busy} onNotice={onNotice} onChange={(value) => update("gameDir", value)} />
             <PathField label="Modpack base folder" value={draft.installDir} placeholder="Folder managed by Mythic Loot" disabled={busy} onNotice={onNotice} onChange={(value) => update("installDir", value)} />
             <label className="field"><span>Installed modpack version</span><input value={draft.localModpackVersion || "Not verified"} readOnly /></label>
-            <Field label="Launch arguments" value={draft.launchArgs} placeholder="Optional Windows command arguments" onChange={(value) => update("launchArgs", value)} />
+            <label className="field"><span>Launch arguments</span><input value={draft.launchArgs} placeholder="Optional Windows command arguments" disabled={busy} onChange={(event) => update("launchArgs", event.target.value)} /></label>
           </div>
 
-          {candidates.length > 0 && (
+          {candidates.length > 0 && !detectionStale && (
             <div className="detection-results">
               <div className="results-title"><Radar size={16} /> Detected installations <span>{candidates.length}</span></div>
               {candidates.map((candidate) => {
@@ -155,7 +158,7 @@ export function SettingsPanel({
                 const syncTarget = draft.game === "minecraft" && isMinecraftSyncTarget(candidate.source);
                 return (
                   <button
-                    key={`${candidate.source}-${candidate.installDir}`}
+                    key={`${candidate.source}-${candidate.installDir}-${modpackDir}-${candidate.exePath ?? ""}`}
                     className={selected ? "selected" : ""}
                     disabled={busy}
                     onClick={() => setDraft((current) => ({
@@ -168,7 +171,8 @@ export function SettingsPanel({
                   >
                     <span>
                       <strong>{candidate.label}</strong>
-                      <small>{!pathsEqual(candidate.installDir, modpackDir) ? `${candidate.installDir} · manages ${modpackDir}` : candidate.installDir}</small>
+                      <small>{!modpackDir ? `${candidate.installDir} · Modpack folder unresolved — choose manually` : !pathsEqual(candidate.installDir, modpackDir) ? `${candidate.installDir} · manages ${modpackDir}` : candidate.installDir}</small>
+                      {candidate.targetNote && <small>{candidate.targetNote}</small>}
                     </span>
                     {selected ? <Check size={17} /> : <span className="use-label">{syncTarget ? "Use as sync target" : "Use"}</span>}
                   </button>
@@ -179,6 +183,9 @@ export function SettingsPanel({
           {!busy && candidates.length === 0 && (
             <p className="detection-note">Run detection to search supported launcher and Steam locations. Manual paths always remain available.</p>
           )}
+          {detectionStale && <p className="detection-note">Settings changed. Run detection again before choosing an installation.</p>}
+          {draft.game === "factorio" && <p className="detection-note">Factorio detection reads the active config-path.cfg/config.ini or absolute --config/-c and --mod-directory overrides in these launch arguments. It does not inspect Steam launch options. Missing or unsupported configuration stays manual; no game files are changed.</p>}
+          {draft.game === "hytale" && <p className="detection-note">Select the matching patchline in Hytale Launcher. For custom installations, use its Settings → Open Directory → User Data, then choose the Mods folder here. Detection does not switch patchlines or configure servers.</p>}
         </section>
 
         {draft.game === "minecraft" && <section className="settings-section panel-card"><MinecraftMetadataInspector profileId={profile.id} directory={draft.installDir} disabled={busy} onNotice={onNotice} /></section>}
@@ -217,25 +224,4 @@ function formatBytes(bytes: number): string {
 
 function pathsEqual(left: string, right: string): boolean {
   return left.replace(/\//g, "\\").toLowerCase() === right.replace(/\//g, "\\").toLowerCase();
-}
-
-function Field({
-  label,
-  value,
-  placeholder,
-  type = "text",
-  onChange,
-}: {
-  label: string;
-  value: string;
-  placeholder?: string;
-  type?: "text" | "number";
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label className="field">
-      <span>{label}</span>
-      <input type={type} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
-    </label>
-  );
 }
