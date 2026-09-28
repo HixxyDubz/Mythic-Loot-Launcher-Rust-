@@ -13,11 +13,12 @@ describe("Launcher preferences", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: /close mythic loot/i }));
     fireEvent.click(screen.getByRole("checkbox", { name: /reduce motion/i }));
     fireEvent.click(screen.getByRole("checkbox", { name: /show decorative background/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /remember window size/i }));
     fireEvent.change(screen.getByLabelText("Colour theme"), { target: { value: "slate" } });
     fireEvent.change(screen.getByLabelText("Interface font"), { target: { value: "verdana" } });
     fireEvent.click(screen.getByRole("button", { name: /save launcher preferences/i }));
     await screen.findByRole("button", { name: /save launcher preferences/i });
-    expect(save).toHaveBeenCalledWith({ autoCheckUpdates: false, closeAfterLaunch: true, reduceMotion: true, theme: "slate", font: "verdana", decorativeBackground: false });
+    expect(save).toHaveBeenCalledWith({ autoCheckUpdates: false, closeAfterLaunch: true, reduceMotion: true, theme: "slate", font: "verdana", decorativeBackground: false, rememberWindow: false });
     fireEvent.click(screen.getByRole("button", { name: /refresh catalogue now/i }));
     expect(refresh).toHaveBeenCalledOnce();
   });

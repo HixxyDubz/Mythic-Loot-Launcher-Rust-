@@ -38,6 +38,7 @@ pub struct LauncherPreferences {
     pub theme: LauncherTheme,
     pub font: LauncherFont,
     pub decorative_background: bool,
+    pub remember_window: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -65,6 +66,7 @@ impl Default for LauncherPreferences {
             theme: LauncherTheme::default(),
             font: LauncherFont::default(),
             decorative_background: true,
+            remember_window: true,
         }
     }
 }

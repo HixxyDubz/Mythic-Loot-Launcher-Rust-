@@ -115,6 +115,7 @@ export function testBootstrapPayload(profiles = structuredClone(testProfiles)): 
         theme: "amethyst",
         font: "system",
         decorativeBackground: true,
+        rememberWindow: true,
       },
     },
     games: [],

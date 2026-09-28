@@ -1,7 +1,7 @@
 {
   "name": "mythic-loot-launcher",
   "private": true,
-  "version": "0.1.15",
+  "version": "0.1.16",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -16,6 +16,7 @@
     "package:windows:player": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Build-WindowsArtifacts.ps1 -Edition Player",
     "package:windows:developer": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Build-WindowsArtifacts.ps1 -Edition Developer",
     "smoke:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Smoke-WindowsArtifacts.ps1",
+    "smoke:window-state": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Smoke-WindowState.ps1",
     "smoke:app-update": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Smoke-AppUpdateHelper.ps1",
     "smoke:live-app-update": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/Smoke-LiveAppUpdate.ps1",
     "tauri": "tauri"

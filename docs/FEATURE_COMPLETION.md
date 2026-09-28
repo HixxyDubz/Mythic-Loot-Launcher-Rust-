@@ -16,7 +16,8 @@ Rust is the maintained application. Python is read-only behavioral reference, ne
 - [x] Hytale default-root patchline-specific mod targets and Factorio declared system/portable/custom targets, including supported absolute command-line overrides (0.1.15). Detection is read-only and reviewed; unsupported/missing configuration remains manual.
 - [ ] Remaining server-free adapter parity: additional custom Hytale root discovery, broader game-version readers where reliable metadata is available, and real adapter gameplay acceptance. Unknown versions must remain unknown; third-party runtime automation needs reviewed integration.
 - [x] Startup update-check behavior, explicit catalogue refresh, close-after-normal-launch, reduced motion, colour theme, font and plain/decorative backgrounds (0.1.11).
-- [ ] Window geometry persistence, custom background selection and opt-in presence.
+- [x] Optional edition-local Windows geometry persistence, maximized-state restore and off-screen/malformed-state fallback (0.1.16).
+- [ ] Custom background selection and opt-in presence.
 - [ ] Crash/session tracking, automatic recovery prompts, log diagnosis and support export.
 - [ ] Native progress/cancellation and recoverable interrupted file transactions.
 - [ ] Re-run adversarial regressions, rebuild both editions, packaged acceptance, and push tested source.

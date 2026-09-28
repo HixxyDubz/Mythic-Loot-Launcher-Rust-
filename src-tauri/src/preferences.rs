@@ -30,6 +30,7 @@ mod tests {
         assert_eq!(preferences.theme, LauncherTheme::Amethyst);
         assert_eq!(preferences.font, LauncherFont::System);
         assert!(preferences.decorative_background);
+        assert!(preferences.remember_window);
     }
 
     #[test]
@@ -59,6 +60,7 @@ mod tests {
         storage::update_at(root.path(), |config| {
             config.preferences.theme = LauncherTheme::Slate;
             config.preferences.auto_check_updates = false;
+            config.preferences.remember_window = false;
             Ok(())
         })
         .unwrap();
@@ -67,5 +69,6 @@ mod tests {
         assert_eq!(saved.optional_selections, original.optional_selections);
         assert_eq!(saved.preferences.theme, LauncherTheme::Slate);
         assert!(!saved.preferences.auto_check_updates);
+        assert!(!saved.preferences.remember_window);
     }
 }

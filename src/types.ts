@@ -35,6 +35,7 @@ export interface LauncherPreferences {
   theme: "amethyst" | "slate";
   font: "system" | "verdana";
   decorativeBackground: boolean;
+  rememberWindow: boolean;
 }
 
 export interface LauncherConfig {

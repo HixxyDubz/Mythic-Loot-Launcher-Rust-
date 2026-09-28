@@ -40,6 +40,8 @@ mod storage;
 mod storage_maintenance;
 mod support;
 mod updater;
+#[cfg(windows)]
+mod window_state;
 
 use activity::{ActivityItem, ActivityKind};
 use java_runtime::{detect_java_runtimes, prepare_java_arguments};
@@ -1118,16 +1120,26 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event
-                && !operations::request_close() {
-                api.prevent_close();
-                let _ = window.emit("launcher-close-blocked", "Wait for current launcher work to finish before closing. Your files are being protected.");
+            #[cfg(windows)]
+            if matches!(event, tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_)) {
+                window_state::track(window);
+            }
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if !operations::request_close() {
+                    api.prevent_close();
+                    let _ = window.emit("launcher-close-blocked", "Wait for current launcher work to finish before closing. Your files are being protected.");
+                } else {
+                    #[cfg(windows)]
+                    window_state::save(window);
+                }
             }
         })
         .setup(|app| {
             let window = app
                 .get_webview_window("main")
                 .ok_or("the main launcher window was not created")?;
+            #[cfg(windows)]
+            window_state::initialize(&window.as_ref().window());
             window.show()?;
             #[cfg(debug_assertions)]
             eprintln!(
@@ -1232,14 +1244,19 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
-            if let tauri::RunEvent::ExitRequested { api, .. } = event
-                && !operations::request_close()
-            {
-                api.prevent_exit();
-                let _ = app.emit(
-                    "launcher-close-blocked",
-                    "Wait for current launcher work to finish before closing.",
-                );
+            if let tauri::RunEvent::ExitRequested { api, .. } = event {
+                if !operations::request_close() {
+                    api.prevent_exit();
+                    let _ = app.emit(
+                        "launcher-close-blocked",
+                        "Wait for current launcher work to finish before closing.",
+                    );
+                } else {
+                    #[cfg(windows)]
+                    if let Some(window) = app.get_webview_window("main") {
+                        window_state::save(&window.as_ref().window());
+                    }
+                }
             }
         });
 }

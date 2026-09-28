@@ -1,6 +1,6 @@
 [package]
 name = "mythic-loot-launcher"
-version = "0.1.15"
+version = "0.1.16"
 description = "A Rust-powered modpack launcher and GitHub publishing companion"
 authors = ["HixxyDubz"]
 edition = "2024"
@@ -40,7 +40,7 @@ semver = "1"
 base64 = { version = "0.22", optional = true }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
 
 [dev-dependencies]
 tempfile = "3"
